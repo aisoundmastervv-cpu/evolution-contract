@@ -1,0 +1,15 @@
+[package]
+name = "evolution-contract"
+version = "0.1.0"
+edition = "2021"
+description = "SIGADEFA Ω — Evolution Application Contract v1.0 scaffold"
+
+[lib]
+name = "evolution_contract"
+path = "src/lib.rs"
+
+[profile.dev]
+# Keep silent arithmetic wraparound loud (e.g. the historical
+# `processes.len() - valid_deaths.len()` underflow class of bug)
+# instead of letting it pass unnoticed in debug builds.
+overflow-checks = true
