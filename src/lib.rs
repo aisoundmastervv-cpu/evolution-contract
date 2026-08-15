@@ -800,12 +800,40 @@ mod tests {
                 pid: pid(1),
                 reason: DeathReason::Administrative,
             }],
-            branches: (0..12)
-                .map(|i| BranchRequest {
-                    parent: pid(2 + (i % 2) as u64),
+            branches: vec![
+                BranchRequest {
+                    parent: pid(2),
                     mutation_rate: 0.1,
-                })
-                .collect(),
+                },
+                BranchRequest {
+                    parent: pid(2),
+                    mutation_rate: 0.1,
+                },
+                BranchRequest {
+                    parent: pid(2),
+                    mutation_rate: 0.1,
+                },
+                BranchRequest {
+                    parent: pid(2),
+                    mutation_rate: 0.1,
+                },
+                BranchRequest {
+                    parent: pid(3),
+                    mutation_rate: 0.1,
+                },
+                BranchRequest {
+                    parent: pid(3),
+                    mutation_rate: 0.1,
+                },
+                BranchRequest {
+                    parent: pid(3),
+                    mutation_rate: 0.1,
+                },
+                BranchRequest {
+                    parent: pid(3),
+                    mutation_rate: 0.1,
+                },
+            ],
         };
         let err = s
             .apply_evolution_plan(
