@@ -1,0 +1,35 @@
+name: Evolution Contract CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke-gate:
+    name: fmt + check + test + clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo check
+        run: cargo check --all-targets
+
+      - name: cargo test
+        run: cargo test --all-targets -- --nocapture
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
