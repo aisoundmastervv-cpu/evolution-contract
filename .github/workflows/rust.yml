@@ -33,3 +33,71 @@ jobs:
 
       - name: cargo clippy
         run: cargo clippy --all-targets -- -D warnings
+
+  g11b-observe:
+    name: G11b observe synthetic signal
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute deterministic probe
+        id: probe
+        shell: bash
+        run: |
+          set +e
+          expected=42
+          actual=99
+          test "$actual" -eq "$expected"
+          exit_code=$?
+          set -e
+
+          test "$exit_code" -eq 1
+
+          cat > g11b-evidence.json <<EOF
+          {
+            "gate": "G11b",
+            "hypothesis": "independent verifier can validate a machine-readable observation tied to the workflow commit",
+            "repository": "${GITHUB_REPOSITORY}",
+            "commit_sha": "${GITHUB_SHA}",
+            "signal": "SYNTHETIC_REGRESSION",
+            "expected": ${expected},
+            "actual": ${actual},
+            "observed_exit_code": ${exit_code},
+            "mutation_allowed": false,
+            "production_mutation": false
+          }
+          EOF
+
+      - name: Publish observation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: g11b-observation
+          path: g11b-evidence.json
+
+  g11b-verify:
+    name: G11b independent verifier
+    if: ${{ !cancelled() }}
+    needs: g11b-observe
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download observation evidence
+        uses: actions/download-artifact@v5
+        with:
+          name: g11b-observation
+          path: evidence
+
+      - name: Independently verify hypothesis
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=evidence/g11b-evidence.json
+
+          test "$(jq -r '.gate' "$file")" = "G11b"
+          test "$(jq -r '.commit_sha' "$file")" = "$GITHUB_SHA"
+          test "$(jq -r '.signal' "$file")" = "SYNTHETIC_REGRESSION"
+          test "$(jq -r '.expected' "$file")" = "42"
+          test "$(jq -r '.actual' "$file")" = "99"
+          test "$(jq -r '.observed_exit_code' "$file")" = "1"
+          test "$(jq -r '.mutation_allowed' "$file")" = "false"
+          test "$(jq -r '.production_mutation' "$file")" = "false"
+
+          cat "$file"
+          echo "G11b VERIFIED: independent evidence matches the current commit and expected observation."
