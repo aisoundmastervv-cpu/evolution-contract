@@ -1,0 +1,1 @@
+The frozen workload uses SIGUSR1 as the registered release signal. The handler is intentionally a no-op so signal.pause() returns and the CPU-demand loop begins. SIGTERM remains the clean termination signal.
