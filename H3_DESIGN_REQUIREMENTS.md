@@ -1,6 +1,6 @@
 # H3 Design Requirements
 
-**Status:** DESIGN-FROZEN CANDIDATE / PRE-REGISTRATION DRAFT
+**Status:** DESIGN-FROZEN CANDIDATE / PRE-REGISTRATION DRAFT — AMENDED
 
 **Hypothesis:** H3 — Causal Execution Hypothesis
 
@@ -133,15 +133,34 @@ CPU consumption must be measured by an execution/measurement layer outside the s
 
 The measurement path must obtain actual execution/resource information from the operating system or an independently controlled runtime facility. It must not infer CPU consumption from `efficiency`, the actuator parameter, or the workload configuration.
 
+### Measurement API isolation
+
+The measurement API must identify the process or cgroup whose resource state is being measured, not the semantic gene from which the intervention originated.
+
+The normative measurement interface is conceptually equivalent to:
+
+```text
+measure_cpu(process_id / cgroup_id)
+```
+
+and **not**:
+
+```text
+measure_cpu(efficiency)
+```
+
+The measurement implementation must not import or depend on `efficiency` to calculate CPU consumption. An experiment/trial identifier may be retained for provenance and record linkage, but it must not participate in the measurement calculation.
+
 The measurement record must preserve at least:
 
-- intervention/gene identifier;
+- intervention/trial identifier;
+- gene value as metadata only, for provenance and stratification;
 - actuator parameter actually applied;
 - workload identity/version;
 - execution environment identity;
 - trial identifier;
-- CPU measurement;
-- wall-clock measurement where available;
+- primary CPU measurement;
+- secondary wall-clock measurement where available;
 - exit status;
 - workload correctness result;
 - relevant CPU/resource-control configuration;
@@ -151,13 +170,25 @@ The measurement layer must not modify the actuator parameter based on the measur
 
 ---
 
-## 7. Mapping Policy
+## 7. Mapping Policy and Execution-Arm Registration
 
 **Mapping policy is intentionally unspecified at this design-freeze stage.**
 
 No specific formula such as linear, exponential, or threshold mapping is part of the current H3 protocol.
 
 Any mapping used for an actual execution must be **pre-registered before outcome observation** for that execution arm.
+
+Execution-arm registration is a separate provenance event from approval of this design document. Before the first outcome observation of an arm, the registration must create a traceable Git commit containing at least:
+
+- `mapping_id`;
+- protocol/design version;
+- exact mapping definition;
+- applicable gene domain;
+- actuator parameter domain and constraints;
+- registration timestamp;
+- registration commit SHA.
+
+The execution arm must reference that exact registration commit. A mapping registration must not be created or modified after outcome observation for the purpose of changing the observed result.
 
 The selected mapping must:
 
@@ -198,7 +229,7 @@ The control condition must not secretly implement the hypothesized causal mechan
 
 ---
 
-## 9. Acceptance Criteria
+## 9. Acceptance Criteria and Outcome Classification
 
 H3 causal evidence requires all of the following:
 
@@ -206,7 +237,7 @@ H3 causal evidence requires all of the following:
 2. **Integrity:** the workload builds and passes its correctness checks.
 3. **Execution:** the registered workload actually executes under the registered actuator conditions.
 4. **Independent measurement:** CPU allocation/resource usage is obtained independently of the gene-to-result hypothesis.
-5. **Intervention effect:** changing the external actuator according to the registered intervention produces a measurable difference in CPU allocation consistent with the operating-system mechanism.
+5. **Intervention effect:** changing the external actuator according to the registered intervention produces a measurable difference in the primary CPU endpoint consistent with the operating-system mechanism.
 6. **Reproducibility:** the observed effect survives the registered repeated-trial protocol rather than appearing only in an isolated run.
 7. **No programmed causality:** inspection of the implementation confirms that SIGADEFA does not directly encode the observed CPU relationship.
 
@@ -216,23 +247,54 @@ A successful actuator intervention without valid independent measurement is insu
 
 A measured difference produced by a workload whose computational effort itself changes with `efficiency` is invalid evidence.
 
+### Three-outcome classification
+
+Every completed execution arm must terminate in exactly one of these three top-level outcomes:
+
+**CAUSAL SUPPORT**
+
+The registered intervention was valid, the primary endpoint was independently measured, the execution passed all validity checks, the registered effect criterion was met, and the result was reproducible under the registered trial protocol.
+
+**NULL-FALSIFICATION**
+
+The registered intervention and measurement were valid, experimental sensitivity and validity criteria were satisfied, but the registered causal effect was absent or failed the pre-registered effect criterion under replication.
+
+This is a falsification result for the tested H3 mechanism under the tested execution environment/protocol, not necessarily a universal falsification of every possible implementation of H3.
+
+**INCONCLUSIVE**
+
+The experiment cannot validly distinguish support from null-falsification because an execution, measurement, provenance, environment, or other validity condition failed or became indeterminate.
+
+An infrastructure failure, insufficient measurement validity, or uncontrolled contamination must not be converted into either causal support or null-falsification.
+
 ---
 
 ## 10. Falsification Criteria
 
-H3 is falsified for the tested execution environment/protocol if the pre-registered experiment satisfies its validity conditions but fails to demonstrate the registered causal effect under the specified intervention.
+H3 is falsified **for the tested execution environment/protocol** only when the experiment reaches the `NULL-FALSIFICATION` outcome under the registered validity and sensitivity conditions.
 
 In particular, a valid null result must remain a null result. The mapping, workload, measurement procedure, or analysis must not be changed after observing the result solely to recover the expected effect.
 
-The following are also falsification/invalid-evidence outcomes as applicable:
+The following conditions can lead to `NULL-FALSIFICATION` when the validity requirements remain satisfied:
 
 - the external actuator has no measurable causal effect under the registered conditions;
-- the effect disappears under registered replication;
+- the registered effect is absent under registered replication;
+- the observed result fails the pre-registered effect criterion despite valid intervention and measurement.
+
+The following conditions instead require `INCONCLUSIVE` unless the protocol explicitly establishes that they constitute a valid null test:
+
+- infrastructure failure;
+- invalid or incomplete measurement;
+- provenance failure;
+- uncontrolled environmental contamination;
+- failure to establish sufficient experimental sensitivity;
+- inability to establish that the registered actuator intervention actually occurred.
+
+The following invalidate a claimed causal result regardless of direction:
+
 - the observed effect is attributable to workload changes rather than the external actuator;
 - the measurement path is shown to derive its result from the gene or actuator instead of actual CPU/resource state;
 - the experiment requires a forbidden in-process mechanism to produce the claimed result.
-
-A failure caused by an unrelated infrastructure defect must be classified as **INCONCLUSIVE / EXECUTION FAILURE**, not automatically as H3 falsification.
 
 ---
 
@@ -252,11 +314,53 @@ The implementation protocol must account for at least:
 - CPU frequency variation;
 - process placement and concurrency.
 
+Each relevant environmental factor must be assigned one of three statuses in the execution-arm registration and final evidence record:
+
+### CONTROLLED
+
+The experiment actively fixes, constrains, or standardizes the factor across compared interventions.
+
+### RECORDED
+
+The factor cannot be fully controlled, but its observed state is captured as part of the execution evidence and used in validity assessment.
+
+### UNCONTROLLED
+
+The factor cannot be controlled or reliably recorded. An uncontrolled factor that can materially affect the primary endpoint must be an explicit exclusion/contamination condition rather than silently ignored.
+
 The protocol must record which controls are actually available in the execution environment rather than assuming that the environment is perfectly isolated.
 
 ---
 
-## 12. Provenance and Evidence
+## 12. Primary Endpoint, Secondary Measures, and Evidence
+
+### Primary endpoint
+
+The primary outcome is **CPU time / CPU allocation attributable to the controlled process or cgroup during the fixed measurement window**, obtained independently from operating-system resource accounting.
+
+Where the execution environment exposes both raw CPU time and an allocation/share measure, raw CPU time is the primary measurement and CPU allocation/share is a secondary supporting measure unless the execution-arm registration explicitly pre-registers the allocation measure as the primary endpoint for a documented reason.
+
+Wall-clock time is secondary and must not replace the primary CPU endpoint after outcome observation.
+
+The exact OS counter(s), units, sampling/collection method, and measurement window must be pre-registered in the execution arm before outcome observation.
+
+### Evidence record
+
+Every trial must preserve sufficient raw evidence to establish:
+
+- primary CPU endpoint;
+- secondary measures where collected;
+- actuator value actually applied;
+- workload identity/version;
+- trial identifier;
+- execution environment;
+- correctness result;
+- validity/exclusion status;
+- raw OS resource-accounting data or an immutable reference to it.
+
+---
+
+## 13. Provenance and Evidence
 
 Every H3 execution must be traceable to:
 
@@ -264,6 +368,7 @@ Every H3 execution must be traceable to:
 canonical repository
     -> commit SHA
     -> protocol version
+    -> execution-arm registration commit
     -> workload identity
     -> execution environment
     -> actuator configuration
@@ -273,11 +378,11 @@ canonical repository
 
 Chat messages, sandbox artifacts, copied logs, or remembered values are not authoritative substitutes for GitHub provenance.
 
-The final causal claim must cite the exact executable commit and raw execution evidence from the canonical execution path.
+The final causal claim must cite the exact executable commit, execution-arm registration commit, and raw execution evidence from the canonical execution path.
 
 ---
 
-## 13. Gate Semantics for H3
+## 14. Gate Semantics for H3
 
 H3 must use the existing gate architecture without collapsing distinct claims:
 
@@ -307,7 +412,7 @@ A successful execution is evidence only after the recorded measurement and prove
 
 ---
 
-## 14. Implementation Boundary
+## 15. Implementation Boundary
 
 This document authorizes design constraints only. It does **not** authorize silently modifying the frozen H2 implementation or tests.
 
@@ -317,7 +422,7 @@ The first implementation must not claim H3 validity. It may establish only that 
 
 ---
 
-## 15. Approval State
+## 16. Approval State
 
 **Current state:** PRE-REGISTERED DESIGN CANDIDATE — PENDING APPROVAL.
 
