@@ -30,6 +30,14 @@ jobs:
             echo "DIFF_EXISTS"
           fi
 
+      - name: Show baseline compiler-error locations
+        shell: bash
+        run: |
+          echo '--- src/validation_executor.rs:125-140 ---'
+          nl -ba src/validation_executor.rs | sed -n '125,140p'
+          echo '--- src/lib.rs:305-325 ---'
+          nl -ba src/lib.rs | sed -n '305,325p'
+
       - name: Upload rustfmt diff
         uses: actions/upload-artifact@v4
         with:
