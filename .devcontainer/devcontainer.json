@@ -1,0 +1,12 @@
+{
+  "name": "evolution-contract",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}
