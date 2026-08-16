@@ -1,64 +1,109 @@
-name: Cloud Execution Conformance
+name: EEC-003 Environment Revalidation
 
 on:
   push:
-    branches: [main, 'cloud/**']
-  pull_request:
-    branches: [main]
+    branches:
+      - 'cloud/**'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  cloud-conformance:
-    name: provider-neutral cloud substrate conformance
-    runs-on: ubuntu-latest
+  eec-003:
+    name: EEC-003 environment revalidation
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout exact revision
+      - name: Checkout exact candidate
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
 
-      - name: Capture provenance
+      - name: Execute controlled environment revalidation
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p cloud-evidence
-          cat > cloud-evidence/provenance.txt <<EOF
-          commit=$GITHUB_SHA
-          workflow=$GITHUB_WORKFLOW
-          run_id=$GITHUB_RUN_ID
-          repository=$GITHUB_REPOSITORY
-          executor_spec=docs/gates/reference-executor-spec-v0.1.md
-          cloud_spec=docs/gates/cloud-execution-architecture-spec-v0.1.md
-          cloud_implementation_plan=docs/gates/cloud-execution-implementation-plan-v0.1.md
-          EOF
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Run cloud conformance tests
-        shell: bash
-        run: |
-          set -o pipefail
-          cargo test --test cloud_execution -- --nocapture 2>&1 | tee cloud-evidence/raw-test-output.txt
-
-      - name: Record result
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
+          evidence="$RUNNER_TEMP/eec-003-evidence.txt"
+          sentinel="$RUNNER_TEMP/eec-003-mutation-sentinel"
+          stderr="$RUNNER_TEMP/eec-003-reentry-stderr.txt"
+          expected_commit="$GITHUB_SHA"
+          actual_commit="$(git rev-parse HEAD)"
+          test "$actual_commit" = "$expected_commit"
+          remote="$(git remote get-url origin)"
+          contract_sha="$(sha256sum docs/execution/environment-contract-v0.1.md | awk '{print $1}')"
+          bootstrap_sha="$(sha256sum scripts/bootstrap-environment.sh | awk '{print $1}')"
+          rustc_version="$(rustc --version)"
+          cargo_version="$(cargo --version)"
+          identity_input=$(printf '%s\n' "repository=$remote" "commit=$actual_commit" "environment_contract_sha256=$contract_sha" "bootstrap_sha256=$bootstrap_sha" "rustc=$rustc_version" "cargo=$cargo_version")
+          expected_environment_id="$(printf '%s' "$identity_input" | sha256sum | awk '{print $1}')"
+          test -z "$(git status --porcelain)"
           {
-            echo "commit=$GITHUB_SHA"
-            echo "run_id=$GITHUB_RUN_ID"
-            echo "test_status=${{ job.status }}"
-          } | tee cloud-evidence/result.txt
+            echo "initial_remote=$remote"
+            echo "initial_head=$actual_commit"
+            printf 'initial_workspace_status='; git status --porcelain
+            echo "initial_environment_id=$expected_environment_id"
+            echo "initial_rustc=$rustc_version"
+            echo "initial_cargo=$cargo_version"
+          } | tee "$evidence"
+          EXPECTED_COMMIT="$expected_commit" EXPECTED_ENVIRONMENT_ID="$expected_environment_id" bash scripts/agent-environment-gate.sh | tee -a "$evidence"
+          grep -Fq 'AGENT_ENVIRONMENT: READY' "$evidence"
+          echo 'initial_gate=READY' | tee -a "$evidence"
 
-      - name: Upload cloud evidence
+          drift_dir="$RUNNER_TEMP/eec-003-drift-bin"
+          mkdir -p "$drift_dir"
+          real_rustc="$(command -v rustc)"
+          cat > "$drift_dir/rustc" <<EOF
+#!/usr/bin/env bash
+if [[ "\${1:-}" == "--version" ]]; then
+  echo 'rustc 999.0.0 (controlled-environment-drift)'
+  exit 0
+fi
+exec "$real_rustc" "\$@"
+EOF
+          chmod +x "$drift_dir/rustc"
+          export PATH="$drift_dir:$PATH"
+
+          drifted_rustc="$(rustc --version)"
+          drifted_remote="$(git remote get-url origin)"
+          drifted_head="$(git rev-parse HEAD)"
+          drifted_status="$(git status --porcelain)"
+          test "$drifted_rustc" = 'rustc 999.0.0 (controlled-environment-drift)'
+          test "$drifted_remote" = "$remote"
+          test "$drifted_head" = "$expected_commit"
+          test -z "$drifted_status"
+          {
+            echo "drift_rustc=$drifted_rustc"
+            echo "drift_remote=$drifted_remote"
+            echo "drift_head=$drifted_head"
+            printf 'drift_workspace_status=%s\n' "$drifted_status"
+          } | tee -a "$evidence"
+
+          rm -f "$sentinel" "$stderr"
+          set +e
+          EXPECTED_ENVIRONMENT_ID="$expected_environment_id" bash scripts/agent-mutation-entrypoint.sh "$expected_commit" -- touch "$sentinel" 2>"$stderr" >>"$evidence"
+          reentry_exit=$?
+          set -e
+          cat "$stderr" | tee -a "$evidence"
+          echo "reentry_exit=$reentry_exit" | tee -a "$evidence"
+          test "$reentry_exit" -ne 0
+          grep -Fq 'AGENT_ENVIRONMENT: NOT_READY' "$stderr"
+          grep -Fq 'reason=environment-identity-mismatch' "$stderr"
+          test ! -e "$sentinel"
+          echo 'mutation_sentinel=absent' | tee -a "$evidence"
+
+          final_remote="$(git remote get-url origin)"
+          final_head="$(git rev-parse HEAD)"
+          final_status="$(git status --porcelain)"
+          echo "final_remote=$final_remote" | tee -a "$evidence"
+          echo "final_head=$final_head" | tee -a "$evidence"
+          printf 'final_workspace_status=%s\n' "$final_status" | tee -a "$evidence"
+          echo 'EEC-003: PASS' | tee -a "$evidence"
+
+      - name: Upload raw EEC-003 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cloud-conformance-evidence-${{ github.sha }}
-          path: cloud-evidence/
+          name: eec-003-environment-revalidation-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/eec-003-evidence.txt
           if-no-files-found: error

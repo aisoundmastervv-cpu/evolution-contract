@@ -1,0 +1,22 @@
+name: EEC-003 Actions Diagnostic
+
+on:
+  push:
+    branches:
+      - cloud/eec-003-diagnostic
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Runner reached
+        run: |
+          set -euo pipefail
+          echo "workflow-dispatch-or-push-reached-runner"
+          echo "sha=$GITHUB_SHA"
+          echo "run_id=$GITHUB_RUN_ID"
+          echo "repository=$GITHUB_REPOSITORY"
