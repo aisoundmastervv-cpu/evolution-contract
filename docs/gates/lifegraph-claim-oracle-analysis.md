@@ -22,32 +22,31 @@ For a death, the formerly active process has no active life node and its histori
 
 For a birth, the accepted child has a corresponding active life node, and the parent/child relation and birth metadata are represented as required by the contract.
 
-This Claim is intentionally limited to the semantics explicitly stated in §6 and does not assert any implementation-specific graph representation, ordering, container type, or serialization.
+This Claim is intentionally limited to the semantics explicitly stated in §6 and does not assert any implementation-specific graph representation, ordering, container type, serialization, or converse mapping beyond what the Contract explicitly requires.
 
-## 3. Candidate independent Oracle
+## 3. Revised candidate independent Oracle
 
-**O-LG:** Observe the post-transition semantic state through three implementation-neutral projections:
+**O-LG:** Observe the post-transition semantic state through implementation-neutral projections whose contents are defined only by Contract v1.0 §6:
 
-1. **Active-process projection** — the set of processes considered active by the application state.
-2. **Active-LifeGraph projection** — the set of active life nodes and their identity correspondence to active processes.
-3. **Historical/Genealogical projection** — fossil/history entries and parent/child plus birth/death metadata required by §6.
+1. **Active-process projection** — the set of processes considered active by the application state, limited to the identities needed to evaluate the Contract's LifeGraph correspondence.
+2. **Active-LifeGraph projection** — the active life-node representation needed to determine whether each active process has its required corresponding life node.
+3. **Historical/Genealogical projection** — fossil/history entries and the parent/child plus birth/death metadata explicitly required by §6.
 
-The Oracle evaluates only the relations explicitly required by Contract v1.0:
+The Oracle evaluates only these Contract-supported relations:
 
-- every active process has exactly one corresponding active life node;
-- every active life node corresponds to an active process;
-- accepted death removes the active correspondence and preserves the required historical representation and death metadata;
-- accepted birth creates the child process and corresponding active life node and preserves the required parent/child and birth metadata.
+- for each active process, the required corresponding active life node is present;
+- for an accepted death, the active life node is removed, the required death metadata is recorded, and the resulting historical representation is placed in fossil/history;
+- for an accepted birth, the child process and corresponding active life node are present, the required parent/child relation and birth metadata are recorded, and the child is eligible for scheduling.
 
-The Oracle does not inspect Rust types, collection internals, helper functions, control flow, or current implementation-specific symbols.
+The Oracle does **not** require a converse relation from every active life node to an active process, does not impose an `exactly one` cardinality requirement unless separately sourced from the Contract, and does not inspect Rust types, collection internals, helper functions, control flow, or current implementation-specific symbols.
 
 ## 4. Independence assessment
 
-The Claim and Oracle are derivable from Contract v1.0 itself rather than from the current implementation. The contract explicitly defines the semantic relations to be observed and explicitly declares LifeGraph consistency independently testable.
+The revised Claim and Oracle are derived from Contract v1.0 §6 and §9 rather than from the current implementation. The Contract explicitly defines the semantic relations to be observed and explicitly declares LifeGraph consistency independently testable.
 
-Therefore an independent semantic Claim + Oracle **can be constructed** for the LifeGraph dimension without adding a new normative requirement.
+The previous adversarial review identified that the earlier Oracle formulation had silently strengthened the Contract by adding a converse and exact-cardinality requirement. Those additions have now been removed. The revised Oracle is limited to observations and expected relations directly stated by the Contract.
 
-However, independence is not yet sufficient for Gate authorization. The exact observation mechanism and expected outcomes must still be specified without importing assumptions from the current implementation, and the Claim/Oracle pair must undergo adversarial review before freezing.
+Therefore an independent semantic Claim + Oracle **can be constructed** for the LifeGraph dimension without silently extending the Contract.
 
 ## 5. Boundary
 
@@ -61,6 +60,4 @@ It establishes only the narrower methodological result:
 
 ## 6. Next permitted step
 
-Review the candidate C-LG / O-LG pair adversarially. If it survives, freeze the pair as a baseline before designing any positive or negative cases.
-
-No LifeGraph test cases or harness changes are authorized by this document.
+A short repeat independence review is required before freezing C-LG/O-LG. No LifeGraph test cases or harness changes are authorized by this document.
