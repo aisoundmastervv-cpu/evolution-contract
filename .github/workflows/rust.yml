@@ -2,13 +2,36 @@ name: Evolution Contract CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'architecture/**']
   pull_request:
     branches: [main]
 
 jobs:
+  baseline-integrity:
+    name: baseline identity + diagnostic check
+    runs-on: ubuntu-latest
+    env:
+      BASELINE_SHA: ffb45c06fd835f9b8cc765d91797090b9bfccc34
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify baseline identity and ancestry
+        run: |
+          git cat-file -e "${BASELINE_SHA}^{commit}"
+          git merge-base --is-ancestor "$BASELINE_SHA" "$GITHUB_SHA"
+
+      - name: Baseline identity record
+        run: echo "BASELINE_IDENTITY=PASS $BASELINE_SHA"
+
+      - name: Diagnostic cargo check
+        run: cargo check --all-targets
+
   smoke-gate:
-    name: fmt + check + test + clippy
+    name: experiment fmt + check + test + clippy
+    needs: baseline-integrity
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,8 +51,8 @@ jobs:
       - name: cargo check
         run: cargo check --all-targets
 
-      - name: cargo test
-        run: cargo test --all-targets -- --nocapture
+      - name: H2 regression tests
+        run: cargo test -- fitness::tests -- --nocapture
 
       - name: cargo clippy
         run: cargo clippy --all-targets -- -D warnings

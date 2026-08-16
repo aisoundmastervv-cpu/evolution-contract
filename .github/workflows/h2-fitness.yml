@@ -1,0 +1,24 @@
+name: H2 Fitness Regression
+
+on:
+  push:
+    branches: [h2-fitness-hypothesis]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/fitness.rs'
+      - 'tests/fitness.rs'
+      - '.github/workflows/h2-fitness.yml'
+
+jobs:
+  h2-fitness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run H2 regression tests
+        run: cargo test -- fitness::tests
