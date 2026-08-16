@@ -4,7 +4,7 @@ Status: **DRAFT — TEST DESIGN ONLY**
 
 ## Purpose
 
-Define the positive, negative, and boundary cases for G11 strictly from the frozen semantic baseline. This document does not change the Claim or Oracle and does not authorize implementation changes or test execution.
+Define the positive, negative, and boundary cases for G11 strictly from the frozen semantic baseline. This document does not change the Claim or Oracle and does not authorize production changes or test execution.
 
 ## Frozen inputs
 
@@ -23,40 +23,42 @@ Tests may operationalize the frozen predicates. They may not add new semantic re
 
 | ID | Frozen predicate | Required observable failure |
 |---|---|---|
-| O1-A | Capability safety | An ineligible/unauthorized target is admitted as an authorized evolution operation |
+| O1-A | Capability safety | An `Immune` or `Protected` process is admitted as an authorized evolution target through the normal capability boundary |
 | O1-B | Structural atomicity | A structurally invalid plan causes any evolution-state mutation |
-| O1-C | Build-then-commit atomicity | A failed child build causes committed evolution mutation, including death, child, generation, or LifeGraph mutation |
+| O1-C | Build-then-commit atomicity | A failed child build causes committed evolution mutation, including deaths, children, generation advance, or LifeGraph mutation |
 | O1-D | Temporal tolerance | A stale request becomes a plan-wide failure or invalidates an unrelated valid request |
 
-## Positive cases
+## Positive / control cases
 
-### TC-P01 — Authorized evolution request
+These cases are controls and operational coverage. They do **not** create a new semantic success oracle beyond O1.
 
-**Exercises:** O1-A
+### TC-P01 — Eligible target capability control
 
-**Purpose:** Verify that an eligible target can pass the contract's capability gate when all other required conditions are satisfied.
+**Exercises:** O1-A control
 
-**Expected observable outcome:** The request is not rejected solely because the target lacks the required capability.
+**Purpose:** Confirm the harness can construct an otherwise eligible evolution target and observe the capability boundary without confusing eligibility with unauthorized admission.
 
-**Evidence:** machine-readable application result plus post-state sufficient to establish the capability outcome.
+**Expected observable outcome:** The eligible target is representable as an evolution-capable request target. No O1-A failure is present.
 
-### TC-P02 — Structurally valid plan with successful build
+**Evidence:** capability/result observation sufficient to show the fixture is suitable for O1-A testing.
 
-**Exercises:** O1-B, O1-C
+### TC-P02 — Valid-plan build control
 
-**Purpose:** Establish the normal admissible path needed as the control case for rejection/failed-build cases.
+**Exercises:** O1-C control
 
-**Expected observable outcome:** No O1-B or O1-C failure condition is observed.
+**Purpose:** Establish a valid plan/build fixture that can be reused to construct the corresponding forced-build-failure case.
 
-**Scope note:** This case does not assert exact genealogy, generation, queue, fossil, or audit semantics beyond the frozen contract requirements.
+**Expected observable outcome:** The fixture reaches the build-success path without an O1-C failure condition.
 
-### TC-P03 — Mixed application containing stale and valid requests
+**Scope note:** This is a harness control, not an assertion of exact successful transition semantics.
+
+### TC-P03 — Mixed stale + valid control
 
 **Exercises:** O1-D
 
-**Purpose:** Verify individual temporal tolerance without invalidating an unrelated valid request.
+**Purpose:** Establish the application shape required to observe individual stale tolerance and preservation of an unrelated valid request.
 
-**Expected observable outcome:** The stale request is skipped/ignored according to the contract and the unrelated valid request is not invalidated solely because of the stale request.
+**Expected observable outcome:** The stale request is individually skipped/tolerated and the unrelated valid request remains eligible, exactly as required by O1-D.
 
 ## Negative cases
 
@@ -64,25 +66,25 @@ Tests may operationalize the frozen predicates. They may not add new semantic re
 
 **Exercises:** O1-A
 
-**Expected observable outcome:** The target is not admitted as an authorized evolution operation. Any admission is an O1-A failure.
+**Expected observable outcome:** An `Immune` or `Protected` process is not admitted as an authorized evolution target through the normal capability boundary. Any such admission is an O1-A failure.
 
 ### TC-N02 — Structurally invalid plan
 
 **Exercises:** O1-B
 
-**Expected observable outcome:** Evolution state before and after application is observationally identical with respect to the contract's evolution state. Any partial death, birth, genealogy, generation, or equivalent mutation is an O1-B failure.
+**Expected observable outcome:** Evolution state before and after application is observationally identical with respect to the contract's evolution state. Any partial evolution-state mutation is an O1-B failure.
 
 ### TC-N03 — Child build failure after otherwise admissible validation
 
 **Exercises:** O1-C
 
-**Expected observable outcome:** No committed evolution mutation: specifically no deaths, no children, no generation bump, and no LifeGraph mutation. Failure/audit recording is allowed only as specified by the contract.
+**Expected observable outcome:** No committed evolution mutation: specifically no deaths, no children, no generation advance, and no LifeGraph mutation. Failure/audit recording is allowed only as specified by Contract v1.0.
 
-### TC-N04 — Stale request without unrelated valid work
+### TC-N04 — Stale request paired with unrelated valid request
 
 **Exercises:** O1-D
 
-**Expected observable outcome:** The stale request is individually tolerated/skipped rather than being treated as a plan-wide invalidation.
+**Expected observable outcome:** The stale request is individually skipped/tolerated, and the unrelated valid request remains eligible for application. Treating the stale request as a plan-wide failure or invalidating the unrelated valid request is an O1-D failure.
 
 ## Boundary / adversarial cases
 
@@ -98,21 +100,21 @@ Arrange the request so that a naive implementation could commit earlier effects 
 
 **Expected:** O1-C remains satisfied: no committed evolution mutation.
 
-### TC-B03 — Stale request adjacent to valid request
+### TC-B03 — Stale request ordering
 
-Place the stale request immediately before and immediately after an unrelated valid request in separate executions/fixtures.
+Run the same stale + unrelated-valid fixture with the stale request before and after the unrelated valid request.
 
 **Expected:** O1-D remains satisfied in either ordering; the stale request does not invalidate unrelated valid work.
 
 ### TC-B04 — Capability failure combined with otherwise valid structure
 
-Make the plan structurally valid but target an ineligible entity.
+Make the plan structurally valid but target an `Immune` or `Protected` entity.
 
 **Expected:** O1-A rejects admission; structural validity must not bypass capability safety.
 
 ## Evidence requirements
 
-Each executed case must produce machine-readable evidence containing at least:
+Each executed semantic case must produce machine-readable evidence containing at least:
 
 - test case ID;
 - frozen Contract v1.0 reference;
@@ -123,6 +125,8 @@ Each executed case must produce machine-readable evidence containing at least:
 - post-state observation relevant to that predicate;
 - outcome (`PASS` / `FAIL`);
 - failure classification if `FAIL`.
+
+For O1-D, evidence must explicitly identify both the stale request and the unrelated valid request and show that the latter remains eligible.
 
 Evidence must be generated by the harness and retained as an immutable artifact. Human narrative is supplementary and cannot replace raw machine evidence.
 
