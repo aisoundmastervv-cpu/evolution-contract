@@ -1,0 +1,115 @@
+name: Artifact Identity Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      experiment_commit:
+        description: 'Immutable commit SHA to execute'
+        required: true
+        type: string
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  identity-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Resolve execution identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ inputs.experiment_commit || '' }}" ]]; then
+            echo "commit=${{ inputs.experiment_commit }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "commit=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout exact immutable commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.identity.outputs.commit }}
+          fetch-depth: 1
+
+      - name: Require artifact lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f experiment/artifact-lock.yml
+
+      - name: Verify immutable commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(sed -n 's/^commit: *//p' experiment/artifact-lock.yml | head -n1)"
+          actual="$(git rev-parse HEAD)"
+          test -n "$expected"
+          test "$expected" = "$actual"
+
+      - name: Verify manifest hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import re
+          import sys
+
+          manifest = Path('experiment/artifact-lock.yml').read_text()
+          entries = re.findall(r'^  - path: (.+)\n    sha256: ([0-9a-f]{64})$', manifest, re.MULTILINE)
+          if not entries:
+              print('No hash entries found in experiment/artifact-lock.yml', file=sys.stderr)
+              raise SystemExit(1)
+
+          for path, expected in entries:
+              p = Path(path)
+              if not p.is_file():
+                  print(f'MISSING: {path}', file=sys.stderr)
+                  raise SystemExit(1)
+              actual = hashlib.sha256(p.read_bytes()).hexdigest()
+              if actual != expected:
+                  print(f'MISMATCH: {path}', file=sys.stderr)
+                  print(f'  expected {expected}', file=sys.stderr)
+                  print(f'  actual   {actual}', file=sys.stderr)
+                  raise SystemExit(1)
+              print(f'OK: {path}')
+          PY
+
+      - name: Identity gate passed
+        run: echo 'IDENTITY GATE: PASS'
+
+  execution-gate:
+    needs: identity-gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Resolve execution identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ inputs.experiment_commit || '' }}" ]]; then
+            echo "commit=${{ inputs.experiment_commit }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "commit=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.identity.outputs.commit }}
+          fetch-depth: 1
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Execute declared experiment
+        shell: bash
+        run: cargo test -- fitness::tests
+
+      - name: Execution gate passed
+        run: echo 'EXECUTION GATE: PASS'
