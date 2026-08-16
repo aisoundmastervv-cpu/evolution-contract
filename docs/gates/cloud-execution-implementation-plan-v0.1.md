@@ -1,6 +1,6 @@
 # Cloud Execution Implementation Plan v0.1
 
-**Status:** IMPLEMENTATION RECORD — CLOUD ARCHITECTURE APPROVED
+**Status:** IMPLEMENTATION RECORD — CONFORMANCE PENDING
 
 ## Normative source
 
@@ -10,37 +10,31 @@ Approved by:
 
 `docs/gates/cloud-execution-architecture-spec-v0.1-approval.md`
 
+## Implemented reference substrate
+
+- `src/cloud_execution.rs` — provider-neutral execution context, attempt/outcome records, persistence abstraction, retry-context preservation, and fail-closed recovery.
+- `tests/cloud_execution.rs` — reference conformance test entrypoint.
+- `.github/workflows/cloud-conformance.yml` — machine-readable CI/evidence workflow.
+
 ## Scope
 
-Implement only the provider-neutral execution substrate required by the approved cloud architecture.
+The implementation is deliberately provider-neutral. It does not select or provision AWS, GCP, Azure, Kubernetes, Terraform, or a production deployment platform.
 
-The first implementation is intentionally a reference/local provider adapter. It exercises the cloud contract without selecting AWS, GCP, Azure, Kubernetes, Terraform, or a production deployment platform.
+The reference substrate exercises the approved cloud contract without assigning semantic authority to infrastructure.
 
-## Required boundaries
+## Required boundaries exercised
 
 - immutable artifact identities are explicit inputs;
-- executor invocation is explicit and opaque to the cloud layer;
+- executor invocation is represented by an opaque provider-neutral interface;
 - execution attempts are distinct from machine transitions;
-- retries create execution attempts, not semantic transitions;
-- operational failures remain non-semantic unless an authorized mapping exists;
-- state/evidence/trace/verdict/telemetry are separate artifact classes;
-- recovery fails closed when authorized state cannot be established;
-- provider substitution does not alter executor semantics.
+- retries reuse the same authorized execution context;
+- operational failures remain non-semantic;
+- state/evidence/trace references remain explicit artifact references;
+- recovery fails closed when persisted state is absent or inconsistent;
+- the implementation does not define State Model transitions or verdict semantics.
 
-## Implementation order
+## Evidence status
 
-1. Define provider-neutral execution context and artifact identities.
-2. Define executor invocation interface.
-3. Define execution-attempt and operational-outcome records.
-4. Define durable-reference interfaces for state/evidence/trace.
-5. Define retry semantics.
-6. Define fail-closed recovery semantics.
-7. Implement an in-memory reference provider for conformance testing.
-8. Add cloud-layer unit/conformance tests without changing State Model, executor semantics, Contract, Test Plan, or harness semantics.
-9. Produce machine-readable execution evidence.
+Cloud implementation is present. Conformance evidence is produced by the dedicated `Cloud Execution Conformance` workflow.
 
-## Explicit non-goals
-
-No cloud account, provider SDK, Terraform, Kubernetes, container orchestration, or production deployment is introduced by the reference implementation.
-
-The reference provider is a conformance substrate, not a production cloud deployment.
+**No production deployment is authorized by this record.**
