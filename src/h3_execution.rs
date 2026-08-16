@@ -179,11 +179,7 @@ mod tests {
     #[test]
     fn cpu_stat_parser_reads_primary_endpoint() {
         let path = std::env::temp_dir().join(format!("h3-cpu-stat-{}", std::process::id()));
-        fs::write(
-            &path,
-            "usage_usec 1234\nuser_usec 900\nsystem_usec 334\n",
-        )
-        .unwrap();
+        fs::write(&path, "usage_usec 1234\nuser_usec 900\nsystem_usec 334\n").unwrap();
         let stat = read_cpu_stat(&path).unwrap();
         fs::remove_file(path).unwrap();
         assert_eq!(stat.usage_usec, 1234);
