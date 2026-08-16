@@ -1,0 +1,64 @@
+name: Cloud Execution Conformance
+
+on:
+  push:
+    branches: [main, 'cloud/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cloud-conformance:
+    name: provider-neutral cloud substrate conformance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Capture provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p cloud-evidence
+          cat > cloud-evidence/provenance.txt <<EOF
+          commit=$GITHUB_SHA
+          workflow=$GITHUB_WORKFLOW
+          run_id=$GITHUB_RUN_ID
+          repository=$GITHUB_REPOSITORY
+          executor_spec=docs/gates/reference-executor-spec-v0.1.md
+          cloud_spec=docs/gates/cloud-execution-architecture-spec-v0.1.md
+          cloud_implementation_plan=docs/gates/cloud-execution-implementation-plan-v0.1.md
+          EOF
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run cloud conformance tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --test cloud_execution -- --nocapture 2>&1 | tee cloud-evidence/raw-test-output.txt
+
+      - name: Record result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "commit=$GITHUB_SHA"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "job_status=${{ job.status }}"
+          } | tee cloud-evidence/result.txt
+
+      - name: Upload cloud evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-conformance-evidence-${{ github.sha }}
+          path: cloud-evidence/
+          if-no-files-found: error
