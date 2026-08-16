@@ -418,7 +418,7 @@ impl PhiScheduler {
         let branch_parents: HashSet<_> = plan.branches.iter().map(|b| b.parent.get()).collect();
         if let Some(pid) = death_ids.intersection(&branch_parents).next() {
             return Err(ApplyError::Structural(
-                StructuralViolation::ConflictingRequest { pid: **pid },
+                StructuralViolation::ConflictingRequest { pid: *pid },
             ));
         }
 
