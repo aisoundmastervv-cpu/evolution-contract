@@ -34,13 +34,13 @@ jobs:
             | tee cloud-evidence/provenance.txt
 
       - name: Check cloud implementation formatting
-        run: rustfmt --edition 2021 --check src/cloud_execution.rs
+        run: rustfmt --edition 2021 --check src/cloud_execution.rs src/cloud_executor_adapter.rs
 
       - name: Run cloud substrate conformance tests
         shell: bash
         run: |
           set -o pipefail
-          rustc --edition 2021 --test src/cloud_execution.rs -o cloud-conformance-tests
+          rustc --edition 2021 --test src/cloud_executor_adapter.rs -o cloud-conformance-tests
           ./cloud-conformance-tests --nocapture 2>&1 | tee cloud-evidence/raw-test-output.txt
 
       - name: Record result
