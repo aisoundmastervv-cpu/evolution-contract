@@ -1,3 +1,4 @@
+# EEC-003 execution candidate: trigger after governance-path correction on main.
 name: EEC-003 Environment Revalidation
 
 on:
