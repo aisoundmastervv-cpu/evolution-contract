@@ -47,8 +47,13 @@ jobs:
           echo "environment_id=$environment_id" >> "$GITHUB_OUTPUT"
           echo "execution_commit=$expected_commit" >> "$GITHUB_OUTPUT"
 
-      - name: Build runner
-        run: cargo build --release --bin h3_runner
+      - name: Compile H3 runner in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --edition=2021 src/bin/h3_runner.rs -O -o "$RUNNER_TEMP/h3_runner"
+          "$RUNNER_TEMP/h3_runner" --validate-only --expected-nice 0
+          "$RUNNER_TEMP/h3_runner" --validate-only --expected-nice 10
 
       - name: Execute 10 registered paired trials
         shell: bash
@@ -59,17 +64,16 @@ jobs:
           set -u
           source config/h3-acp-001.env
           mkdir -p "$RUNNER_TEMP/h3-evidence"
-          binary="$GITHUB_WORKSPACE/target/release/h3_runner"
-          revision="$WORKLOAD_REVISION"
+          binary="$RUNNER_TEMP/h3_runner"
           evidence="$RUNNER_TEMP/h3-evidence"
 
           for i in $(seq 1 "$REQUIRED_PAIRS"); do
             if (( i % 2 == 1 )); then
-              first_role=control; first_nice="$CONTROL_NICE"
-              second_role=treatment; second_nice="$TREATMENT_NICE"
+              first_role=control
+              second_role=treatment
             else
-              first_role=treatment; first_nice="$TREATMENT_NICE"
-              second_role=control; second_nice="$CONTROL_NICE"
+              first_role=treatment
+              second_role=control
             fi
 
             for role in "$first_role" "$second_role"; do
@@ -81,15 +85,12 @@ jobs:
                 --role "$role" \
                 --expected-nice "$nice_value" \
                 --environment-id "$ENVIRONMENT_ID" \
-                --workload-revision "$revision" \
+                --workload-revision "$WORKLOAD_REVISION" \
                 --arm-id "$ARM_ID" \
                 --work-units "$WORK_UNITS" > "$output"
               rc=$?
               set -e
               printf '{"trial_id":"pair-%s","role":"%s","launcher_exit":%s,"execution_commit":"%s"}\n' "$i" "$role" "$rc" "$EXECUTION_COMMIT" > "$evidence/trial-${i}-${role}.status.json"
-              if [[ "$rc" -ne 0 ]]; then
-                echo "trial pair-$i $role failed to materialize (exit=$rc)" >&2
-              fi
             done
           done
 
@@ -99,16 +100,28 @@ jobs:
           ENVIRONMENT_ID: ${{ steps.identity.outputs.environment_id }}
           EXECUTION_COMMIT: ${{ steps.identity.outputs.execution_commit }}
         run: |
-          import glob, json, os, statistics, hashlib
+          import hashlib, json, os, statistics
           from pathlib import Path
 
+          def load_config(path):
+              values = {}
+              for line in path.read_text().splitlines():
+                  line = line.strip()
+                  if line and not line.startswith('#') and '=' in line:
+                      key, value = line.split('=', 1)
+                      values[key] = value
+              return values
+
           evidence = Path(os.environ["RUNNER_TEMP"]) / "h3-evidence"
-          source = Path("config/h3-acp-001.env").read_bytes()
-          config_sha = hashlib.sha256(source).hexdigest()
-          control_nice, treatment_nice = 0, 10
-          required_pairs, min_positive, floor = 10, 9, 1.10
-          pairs = []
-          invalid = []
+          config_path = Path("config/h3-acp-001.env")
+          cfg = load_config(config_path)
+          config_sha = hashlib.sha256(config_path.read_bytes()).hexdigest()
+          required_pairs = int(cfg["REQUIRED_PAIRS"])
+          min_positive = int(cfg["MIN_POSITIVE_PAIRS"])
+          floor = float(cfg["MEDIAN_RATIO_FLOOR"])
+          control_nice = int(cfg["CONTROL_NICE"])
+          treatment_nice = int(cfg["TREATMENT_NICE"])
+          pairs, invalid = [], []
 
           for i in range(1, required_pairs + 1):
               records = {}
@@ -123,27 +136,37 @@ jobs:
                       records[role] = record
                   except Exception as exc:
                       invalid.append(f"pair-{i}/{role}: {exc}")
-              if len(records) == 2:
-                  c, t = records["control"], records["treatment"]
-                  checks = [
-                      c["observed_nice"] == control_nice,
-                      t["observed_nice"] == treatment_nice,
-                      c["environment_id"] == os.environ["ENVIRONMENT_ID"],
-                      t["environment_id"] == os.environ["ENVIRONMENT_ID"],
-                      c["commit"] == os.environ["EXECUTION_COMMIT"],
-                      t["commit"] == os.environ["EXECUTION_COMMIT"],
-                      c["workload_revision"] == t["workload_revision"],
-                      c["work_units"] == t["work_units"],
-                      c["checksum"] == t["checksum"],
-                      c["wall_ms"] > 0 and t["wall_ms"] > 0,
-                  ]
-                  if all(checks):
-                      ratio = t["wall_ms"] / c["wall_ms"]
-                      pairs.append({"pair": i, "control_ms": c["wall_ms"], "treatment_ms": t["wall_ms"], "ratio": ratio})
-                  else:
-                      invalid.append(f"pair-{i}: provenance or workload mismatch")
+              if len(records) != 2:
+                  continue
+              c, t = records["control"], records["treatment"]
+              checks = [
+                  c["observed_nice"] == control_nice,
+                  t["observed_nice"] == treatment_nice,
+                  c["environment_id"] == os.environ["ENVIRONMENT_ID"],
+                  t["environment_id"] == os.environ["ENVIRONMENT_ID"],
+                  c["commit"] == os.environ["EXECUTION_COMMIT"],
+                  t["commit"] == os.environ["EXECUTION_COMMIT"],
+                  c["workload_revision"] == t["workload_revision"],
+                  c["work_units"] == t["work_units"],
+                  c["checksum"] == t["checksum"],
+                  c["wall_ms"] > 0 and t["wall_ms"] > 0,
+              ]
+              if all(checks):
+                  pairs.append({"pair": i, "control_ms": c["wall_ms"], "treatment_ms": t["wall_ms"], "ratio": t["wall_ms"] / c["wall_ms"]})
+              else:
+                  invalid.append(f"pair-{i}: provenance or workload mismatch")
 
-          result = {"schema":"h3-verdict-v0.1", "proposal_id":"H3-ACP-001", "arm_id":"H3-OS-NICE-CAUSAL-v0.1", "environment_id":os.environ["ENVIRONMENT_ID"], "execution_commit":os.environ["EXECUTION_COMMIT"], "config_sha256":config_sha, "valid_pairs":len(pairs), "invalid":invalid, "pairs":pairs}
+          result = {
+              "schema": "h3-verdict-v0.1",
+              "proposal_id": cfg["PROPOSAL_ID"],
+              "arm_id": cfg["ARM_ID"],
+              "environment_id": os.environ["ENVIRONMENT_ID"],
+              "execution_commit": os.environ["EXECUTION_COMMIT"],
+              "config_sha256": config_sha,
+              "valid_pairs": len(pairs),
+              "invalid": invalid,
+              "pairs": pairs,
+          }
           if invalid or len(pairs) < required_pairs:
               result["verdict"] = "INVALID / NON-EVIDENTIARY" if invalid else "INCONCLUSIVE / INSUFFICIENT EVIDENCE"
           else:
@@ -152,6 +175,7 @@ jobs:
               median_ratio = statistics.median(ratios)
               result.update(positive_pairs=positive, median_ratio=median_ratio)
               result["verdict"] = "PASS — causal support" if positive >= min_positive and median_ratio >= floor else "INCONCLUSIVE"
+
           (evidence / "h3-verdict.json").write_text(json.dumps(result, indent=2) + "\n")
           print(json.dumps(result, indent=2))
           if result["verdict"] != "PASS — causal support":
