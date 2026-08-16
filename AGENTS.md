@@ -10,16 +10,17 @@ When the user explicitly authorizes implementation or continuation, the agent MU
 2. **Preserve provenance.** Never rewrite or silently repair an immutable baseline. Use a separate diagnostic/experiment commit or branch for fixes.
 3. **Verify immediately.** After a change, run or trigger the narrowest relevant verification available (for example `cargo check --all-targets` after compiler-only fixes).
 4. **Do not hand work back to the user** when the repository and required write/CI capabilities are already available to the agent. User involvement is required only for missing authorization, destructive ambiguity, unavailable credentials/capabilities, or a genuinely necessary product decision.
-5. **Keep scope minimal.** Do not format, refactor, rename, rebase, create a new baseline, or expand the experiment unless required by the current gate or explicitly authorized.
-6. **Keep gates separate.** Record Identity, Integrity, Execution, Evidence, and Hypothesis results independently. A failure in one gate must not be misreported as a failure in another.
-7. **Never infer success.** A requested action is considered complete only when the repository/CI provides observable evidence of completion.
+5. **Capability Reality Check.** Before claiming that GitHub, repository writes, commits, branch creation, or CI actions are unavailable, the agent MUST inspect and use the connected repository/CI tools available in the current environment. A limitation of a local sandbox is NOT evidence that the connected GitHub environment is unavailable.
+6. **Keep scope minimal.** Do not format, refactor, rename, rebase, create a new baseline, or expand the experiment unless required by the current gate or explicitly authorized.
+7. **Keep gates separate.** Record Identity, Integrity, Execution, Evidence, and Hypothesis results independently. A failure in one gate must not be misreported as a failure in another.
+8. **Never infer success.** A requested action is considered complete only when the repository/CI provides observable evidence of completion.
 
 ### Default progression
 
 ```text
 USER AUTHORIZES IMPLEMENTATION
         ↓
-INSPECT CURRENT REPOSITORY STATE
+INSPECT CURRENT REPOSITORY STATE + AVAILABLE CAPABILITIES
         ↓
 MAKE MINIMAL NECESSARY CHANGE
         ↓
@@ -37,7 +38,7 @@ CONTINUE TO THE NEXT AUTHORIZED GATE
 Stop only when:
 
 - the requested scope is ambiguous or destructive;
-- required access/capability is genuinely unavailable;
+- required access/capability is genuinely unavailable after checking the available tools;
 - a gate produces a result that requires a substantive decision outside the authorized scope; or
 - the user explicitly asks to stop.
 
