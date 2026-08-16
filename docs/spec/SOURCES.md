@@ -4,37 +4,32 @@ Status: **GOVERNANCE BASELINE**
 
 ## Rule
 
-Any artifact used as normative source material for a Gate MUST be addressable by a versioned Git path and commit. Chat messages, writing blocks, local workspace files, and implementation behavior are not normative sources by themselves.
+Any artifact used as normative source material for a Gate MUST be addressable by a versioned Git path and an exact commit. Chat messages, writing blocks, local workspace files, and implementation behavior are not normative sources by themselves.
 
-## Current contract recovery
+## Canonical Contract v1.0
 
-The repository README states that the SIGADEFA Ω Evolution Application Contract v1.0 is design-level CLOSED while the implementation is a scaffold. The earlier working materials contain the recovered design-level reference material, but that material was not previously represented by a canonical Git path.
+**Normative source:** `docs/spec/evolution-application-contract-v1.0.md`
 
-Therefore the authoritative Contract v1.0 source is **not yet frozen in Git**.
+**Version:** `1.0`
 
-## Canonical source
+**Status:** `FROZEN`
 
-Target canonical path:
+**Freezing commit:** `118dd043d6d5d208bc197cda7583c1ea05f0bf47`
 
-`docs/spec/evolution-application-contract-v1.0.md`
+This is the authoritative design-level source for the Evolution Application Contract v1.0.
 
-Required status before use as a normative Gate source:
+## Recovery provenance
 
-- content recovered from the prior design-level artifact;
-- reviewed for completeness against the recovered source;
-- explicitly marked `FROZEN`;
-- referenced by exact commit SHA from dependent Gates.
+The canonical document was reconciled from the previously saved design artifact **“Evolution Application Contract v1.0 — reference skeleton”**. The recovery retained design-level semantics and excluded current implementation observations, test results, and implementation-specific control flow from the normative text.
 
-Until those conditions are met, the file must not be treated as a frozen oracle source.
+The prior ChatGPT-generated artifacts remain useful as recovery evidence, but they are not normative sources once the canonical contract is frozen.
 
 ## Gate dependency rule
 
-A Gate may claim semantic validation only against a source listed here with an explicit version and frozen commit. If a referenced source cannot be resolved, the Gate is blocked rather than reconstructed from implementation behavior.
+A Gate may claim semantic validation only against a source listed here with an explicit version, frozen status, and exact commit SHA. If a referenced source cannot be resolved, the Gate is blocked rather than reconstructed from implementation behavior.
 
-## Non-normative recovery source
-
-The prior ChatGPT-generated artifact `Вставленная ​​уценка(3).md` is retained in the conversation/library as recovery evidence. It may help reconstruct and audit the contract, but it is not itself the canonical normative source.
+A Gate must reference the exact frozen commit, not a moving branch tip.
 
 ## Change discipline
 
-Changes to a frozen contract require a new version or an explicitly governed amendment. A Gate must never silently update its normative source by following a moving branch tip.
+Changes to a frozen contract require a new contract version or an explicitly governed amendment. The v1.0 file must not be silently rewritten while retaining version `1.0` and its frozen status.
