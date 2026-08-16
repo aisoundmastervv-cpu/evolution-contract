@@ -21,21 +21,9 @@ jobs:
           p = Path("src/lib.rs")
           s = p.read_text()
           replacements = [
-              (
-                  "            pending.push(builder.build_child(parent, pid, request.mutation_rate, ordinal)?);",
-                  "            let child = builder\n                .build_child(parent, pid, request.mutation_rate, ordinal)\n                .map_err(ApplyError::Build)?;\n            pending.push(child);",
-                  "BuildError propagation",
-              ),
-              (
-                  "                StructuralViolation::ConflictingRequest { pid: **pid },",
-                  "                StructuralViolation::ConflictingRequest { pid: *pid },",
-                  "conflicting-request PID dereference",
-              ),
-              (
-                  "            branches: (0..12).map(|i| BranchRequest { parent: pid(2 + (i % 2) as u64), mutation_rate: 0.1 }).collect(),",
-                  "            branches: (0..8).map(|i| BranchRequest { parent: pid(2 + (i % 2) as u64), mutation_rate: 0.1 }).collect(),",
-                  "test fixture respects the max-offspring-per-parent cap while reaching builder failure ordinal 7",
-              ),
+              ("            pending.push(builder.build_child(parent, pid, request.mutation_rate, ordinal)?);", "            let child = builder\n                .build_child(parent, pid, request.mutation_rate, ordinal)\n                .map_err(ApplyError::Build)?;\n            pending.push(child);", "BuildError propagation"),
+              ("                StructuralViolation::ConflictingRequest { pid: **pid },", "                StructuralViolation::ConflictingRequest { pid: *pid },", "conflicting-request PID dereference"),
+              ("            branches: (0..12).map(|i| BranchRequest { parent: pid(2 + (i % 2) as u64), mutation_rate: 0.1 }).collect(),", "            branches: (0..8).map(|i| BranchRequest { parent: pid(2 + (i % 2) as u64), mutation_rate: 0.1 }).collect(),", "test fixture respects the max-offspring-per-parent cap while reaching builder failure ordinal 7"),
           ]
           for old, new, label in replacements:
               if s.count(old) != 1:
@@ -57,15 +45,20 @@ jobs:
       - name: cargo test
         run: cargo test --all-targets -- --nocapture
 
-      - name: cargo clippy
-        run: cargo clippy --all-targets -- -D warnings
+      - name: cargo clippy (capture full result)
+        id: clippy
+        continue-on-error: true
+        run: |
+          set +e
+          cargo clippy --all-targets -- -D warnings 2>&1 | tee VALIDATION_CLIPPY_OUTPUT.txt
+          status=${PIPESTATUS[0]}
+          echo "CLIPPY_EXIT_CODE=$status" >> VALIDATION_CLIPPY_OUTPUT.txt
+          exit $status
 
-      - name: Commit validated source and remove temporary harness
+      - name: Commit clippy evidence
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          rm -f VALIDATION_TRIGGER.txt VALIDATION_TEST_OUTPUT.txt .github/workflows/validate-two-fix.yml
-          git add src/lib.rs
-          git add -u
-          git commit -m "Fix compiler errors and align build-failure test fixture"
+          git add VALIDATION_CLIPPY_OUTPUT.txt
+          git commit -m "Record clippy validation result [validation-evidence]"
           git push
