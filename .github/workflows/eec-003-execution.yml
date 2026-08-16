@@ -2,7 +2,7 @@ name: EEC-003 Execution
 
 on:
   pull_request_target:
-    types: [synchronize]
+    types: [opened, reopened, synchronize]
     branches: [main]
   workflow_run:
     workflows: [EEC-001 Agent Environment Conformance]
