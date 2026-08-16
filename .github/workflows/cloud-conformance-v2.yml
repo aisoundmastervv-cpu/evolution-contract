@@ -44,6 +44,21 @@ jobs:
           sha256sum target/release/cloud_runtime | tee cloud-evidence/cloud-runtime-sha256.txt
           cp target/release/cloud_runtime cloud-evidence/cloud_runtime
 
+      - name: Execute production runtime smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./target/release/cloud_runtime \
+            --execution-id packaging-smoke \
+            --transition observation-unavailable \
+            --journal cloud-evidence/runtime-smoke.journal \
+            | tee cloud-evidence/runtime-smoke-output.txt
+          ./target/release/cloud_runtime \
+            --execution-id packaging-smoke \
+            --transition observation-unavailable \
+            --journal cloud-evidence/runtime-smoke.journal \
+            | tee -a cloud-evidence/runtime-smoke-output.txt
+
       - name: Run cloud substrate conformance tests
         shell: bash
         run: |
