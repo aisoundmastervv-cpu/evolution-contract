@@ -240,11 +240,11 @@ Agent ≠ verdict authority
 
 A more capable agent MUST NOT gain additional transition or semantic authority.
 
-## 14. STOP semantics
+## 14. STOP semantics and execution abort
 
-`STOP` is a normal terminal state.
+`STOP` is a normal terminal **machine state**. It is distinct from an operational execution abort.
 
-The executor MUST terminate the current execution path when reaching:
+The executor MUST terminate the current validation path when reaching:
 
 ```text
 OBSERVATION_GAP -> STOP
@@ -253,9 +253,29 @@ NOT_AUTHORIZED -> STOP
 VERDICT -> STOP
 ```
 
-The executor MUST NOT retry a terminal state by inventing a new transition.
+The executor MUST NOT retry a terminal machine state by inventing a new transition.
 
-A subsequent run requires a separately authorized execution context or governance action.
+A subsequent validation run requires a separately authorized execution context or governance action.
+
+An operational failure that is not mapped by an already authorized governance rule to a machine transition MUST NOT be represented as `STOP`, `OBSERVATION_GAP`, `UNDERDETERMINED`, `NOT_AUTHORIZED`, `PASS`, or `FAIL` merely by convention.
+
+Instead, the executor records a separate non-semantic **execution outcome**:
+
+```text
+EXECUTION_ABORTED
+```
+
+`EXECUTION_ABORTED` is NOT a State Model state and NOT a verdict class. It is an operational outcome indicating that computation could not complete. It MUST NOT be interpreted as evidence for or against the validation claim.
+
+```text
+machine state: OBSERVATION_REQUIRED
+operational failure
+        -> execution outcome: EXECUTION_ABORTED
+        -> no semantic verdict
+        -> no implicit machine-state transition
+```
+
+If an approved governance rule explicitly maps a particular operational condition to a State Model transition, that authorized transition applies. Otherwise, the executor MUST preserve the current machine state and terminate the execution attempt with `EXECUTION_ABORTED`.
 
 ## 15. Error boundary
 
@@ -271,7 +291,7 @@ artifact missing
 oracle unavailable
 ```
 
-These are execution conditions. The executor MUST classify them according to an already authorized rule, or stop without manufacturing a semantic verdict.
+These are execution conditions. The executor MUST classify them according to an already authorized rule, or terminate the execution attempt with `EXECUTION_ABORTED` without manufacturing a semantic verdict.
 
 An operational error MUST NOT silently become `PASS` or `FAIL`.
 
@@ -291,6 +311,8 @@ This specification does not:
 - define an agent provider protocol;
 - replace the State Model as normative authority.
 
+`EXECUTION_ABORTED` is an operational outcome defined by this executor specification, not a State Model extension and not a semantic verdict.
+
 ## 17. Conformance criteria
 
 An implementation conforms to this specification only if it demonstrates that:
@@ -304,7 +326,8 @@ An implementation conforms to this specification only if it demonstrates that:
 7. frozen governance artifacts cannot be mutated by executor actions;
 8. machine state and verdict classification remain distinct;
 9. deterministic inputs produce deterministic transition/verdict semantics;
-10. the executor does not introduce semantic predicates or State Model extensions.
+10. operational failures without an authorized semantic mapping produce `EXECUTION_ABORTED` and no semantic verdict;
+11. the executor does not introduce semantic predicates or State Model extensions.
 
 These are conformance requirements for the executor implementation, not new Contract requirements.
 
