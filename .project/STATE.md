@@ -19,7 +19,7 @@
 - Registered treatment condition: `nice +10`.
 - The treatment parameter is fixed before execution and MUST NOT be changed after observing results.
 - Mapping `efficiency -> actuator parameter` remains non-implicit; no outcome-derived parameter selection is permitted.
-- `H3-ACP-001` is now **ADMITTED** as the normative acceptance criterion for this execution arm.
+- `H3-ACP-001` is **ADMITTED** as the normative acceptance criterion for this execution arm.
 - Registered primary observable: paired wall-clock runtime ratio `R_i = T_treatment,i / T_control,i`.
 - Registered minimum sample: **10 valid paired trials**.
 - Registered directional criterion: **at least 9/10 pairs with `R_i > 1`**.
@@ -29,13 +29,16 @@
 - No H3 causal conclusion is established.
 
 ## H3 execution prerequisites
-- The target workload must be deterministic, CPU-bound, external to frozen H2 implementation/tests, and identified by exact repository path and revision.
-- Control and treatment must use the same workload and inputs.
-- Niceness must be independently observed at runtime.
-- Environment identity must be verified using the EEC-003 mechanism before and during the registered execution protocol.
-- Raw control and treatment evidence must be materialized with complete provenance.
-- The runner MUST consume `H3-ACP-001` as admitted contract/configuration data and MUST NOT hard-code a different criterion.
-- The workload runner and workflow may now be designed and implemented within the registered H3 scope.
+- The target workload is deterministic, CPU-bound, external to frozen H2 implementation/tests, and identified by exact workload revision `h3-cpu-workload-v0.1`.
+- Control and treatment use the same workload and inputs.
+- Niceness is independently observed at runtime through `/proc/self/stat` and verified against the registered condition.
+- Scheduler contention is explicitly created by child workers launched at registered baseline `nice 0`; this is part of the workload runner, not an adaptive intervention.
+- Environment identity is verified using the EEC-003 mechanism before execution.
+- Raw control and treatment evidence are materialized with complete provenance and uploaded as an artifact.
+- The machine-readable projection `config/h3-acp-001.env` is consumed by validation and execution workflow; divergence from the admitted criterion is a conformance failure.
+- `src/bin/h3_runner.rs` implements the registered actuator verification and deterministic workload; it has a non-executing validation mode.
+- `.github/workflows/h3-runner-validation.yml` validates the runner and environment contract without executing the causal workload.
+- `.github/workflows/h3-causal-execution.yml` is manually gated and performs the registered 10-pair causal execution only when explicitly dispatched.
 
 ## Provenance incident containment
 - PR #8 (`h3/design-requirements-v1`) was created from this repository but was not part of the canonical approved continuation and was closed without merge.
