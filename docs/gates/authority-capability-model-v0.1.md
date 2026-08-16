@@ -189,7 +189,7 @@ valid_from
 valid_until
 ```
 
-If `valid_until` is absent, the event is invalid for execution authorization unless a higher-level contract explicitly defines a bounded lifetime. No authority is perpetual by default.
+Both fields are mandatory. A missing `valid_from` or `valid_until` makes the authority grant invalid. No higher-level contract, inherited policy, default, or implicit convention may supply a missing boundary. No authority is perpetual by default.
 
 ## 7. Authority state transitions
 
@@ -283,6 +283,37 @@ An event with no valid parent lineage MUST NOT be accepted as authority-bearing.
 
 A later event cannot repair a missing earlier authority event retroactively.
 
+### 9.1 Canonical authority root
+
+The authority graph MUST terminate at a separately governed canonical root. The root is the trust anchor for the authority graph and is not created by the actor whose authority it establishes.
+
+A root MUST itself have:
+
+```text
+root_id
+root_authority_domain
+root_canonical_event_id
+root_object_or_policy_identity
+root_scope
+root_valid_from
+root_valid_until
+root_provenance
+```
+
+The root's provenance MUST be anchored outside the authority claim being established. A root claim that is only self-attested by its subject is not a valid authority root.
+
+For every non-root authority event:
+
+```text
+actor_authority(actor, domain)
+    requires
+valid_canonical_lineage(actor, domain)
+    terminating at
+valid_authority_root(domain)
+```
+
+No authority-bearing event may bootstrap the authority of its own issuer, and no lineage is valid merely because its first event declares itself to be a root.
+
 ## 10. Non-forgeability requirement for future authorization proofs
 
 This model intentionally does NOT define the implementation of `AuthorizedExecutionToken`.
@@ -329,13 +360,14 @@ This model is ready for admission only if governance can verify all of the follo
 3. Every event binds an exact object revision/hash.
 4. Every grant has explicit scope.
 5. Every grant has explicit temporal validity.
-6. Every downstream authority event has valid parent lineage.
+6. Every downstream authority event has valid parent lineage terminating at a valid authority root.
 7. Admission, design approval, and execution authorization are distinct events.
 8. The execution subject cannot issue or escalate its own authority.
 9. The executor can reject execution without a valid canonical authorization event.
 10. Evidence and verdict authority are separate from execution authority.
 11. Revocation and expiry invalidate downstream execution capability.
 12. Artifact existence cannot be interpreted as approval.
+13. An authority claim cannot bootstrap or self-attest its own trust root.
 
 ## 13. Current status
 
