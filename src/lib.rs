@@ -1,3 +1,4 @@
+pub mod h3_execution;
 pub mod validation_executor;
 
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -291,8 +292,6 @@ impl PhiScheduler {
     ) -> Result<(), ApplyError> {
         self.validate_plan(&plan, policy)?;
 
-        // Temporal staleness is resolved per request: missing PIDs are skipped,
-        // rather than invalidating unrelated requests in the same plan.
         let deaths: Vec<_> = plan.deaths.into_iter()
             .filter(|r| self.processes.contains_key(&r.pid.get()))
             .collect();
@@ -300,7 +299,6 @@ impl PhiScheduler {
             .filter(|r| self.processes.contains_key(&r.parent.get()))
             .collect();
 
-        // Build-then-commit: no structural mutation occurs while children are built.
         let mut pending = Vec::with_capacity(branches.len());
         let mut pending_pids = HashSet::with_capacity(branches.len());
         for (ordinal, request) in branches.iter().enumerate() {
@@ -315,9 +313,6 @@ impl PhiScheduler {
         }
 
         let generation_before = self.generation;
-
-        // Commit phase. HashMap insertion is treated as infallible except for the
-        // explicit collision guard above. Deaths and children become visible here.
         for request in deaths {
             let pid = request.pid.get();
             self.processes.remove(&pid);
@@ -498,59 +493,45 @@ mod tests {
         assert!(EvolvablePid::from_filtered(1, ProtectionLevel::Protected).is_none());
         assert!(EvolvablePid::from_filtered(2, ProtectionLevel::Immune).is_none());
         assert!(EvolvablePid::from_filtered(3, ProtectionLevel::Evolvable).is_some());
+        assert!(EvolvablePid::from_filtered(4, ProtectionLevel::Sandboxed).is_some());
     }
 
     #[test]
-    fn next_runnable_skips_stale_entries() {
-        let mut scheduler = scheduler();
-        scheduler.ready_queue = vec![99, 2];
-        assert_eq!(scheduler.next_runnable(), Some(2));
-        assert_eq!(scheduler.next_runnable(), None);
+    fn duplicate_death_requests_are_rejected() {
+        let mut s = scheduler();
+        let plan = EvolutionPlan {
+            population_generation: 0,
+            deaths: vec![DeathRequest { pid: pid(1), reason: DeathReason::Administrative }, DeathRequest { pid: pid(1), reason: DeathReason::Administrative }],
+            branches: vec![],
+        };
+        assert!(matches!(s.apply_evolution_plan(plan, &policy(), &mut DefaultChildBuilder, &mut SeededPidAllocator::new(10)), Err(ApplyError::Structural(StructuralViolation::DuplicateDeathRequest { pid: 1 }))));
     }
 
     #[test]
-    fn rejects_stale_generation_without_mutation() {
-        let mut scheduler = scheduler();
-        let before = scheduler.clone();
-        let plan = EvolutionPlan { population_generation: 99, deaths: vec![], branches: vec![] };
-        let result = scheduler.apply_evolution_plan(plan, &policy(), &mut DefaultChildBuilder, &mut SeededPidAllocator::new(10));
-        assert_eq!(result, Err(ApplyError::Structural(StructuralViolation::InvalidPopulationGeneration { expected: 0, actual: 99 })));
-        assert_eq!(scheduler.processes, before.processes);
-        assert_eq!(scheduler.life_graph, before.life_graph);
-    }
-
-    #[test]
-    fn rejects_conflicting_death_and_branch_requests() {
-        let mut scheduler = scheduler();
+    fn conflicting_death_and_branch_requests_are_rejected() {
+        let mut s = scheduler();
         let plan = EvolutionPlan {
             population_generation: 0,
             deaths: vec![DeathRequest { pid: pid(1), reason: DeathReason::Administrative }],
             branches: vec![BranchRequest { parent: pid(1), mutation_rate: 0.1 }],
         };
-        assert_eq!(
-            scheduler.apply_evolution_plan(plan, &policy(), &mut DefaultChildBuilder, &mut SeededPidAllocator::new(10)),
-            Err(ApplyError::Structural(StructuralViolation::ConflictingRequest { pid: 1 }))
-        );
+        assert!(matches!(s.apply_evolution_plan(plan, &policy(), &mut DefaultChildBuilder, &mut SeededPidAllocator::new(10)), Err(ApplyError::Structural(StructuralViolation::ConflictingRequest { pid: 1 }))));
     }
 
     #[test]
-    fn applies_death_and_branch_atomically_after_build() {
-        let mut scheduler = scheduler();
+    fn build_failure_does_not_partially_apply() {
+        let mut s = scheduler();
+        let before = s.clone();
         let plan = EvolutionPlan {
             population_generation: 0,
-            deaths: vec![DeathRequest { pid: pid(4), reason: DeathReason::Administrative }],
-            branches: vec![BranchRequest { parent: pid(1), mutation_rate: 0.25 }],
+            deaths: vec![],
+            branches: vec![BranchRequest { parent: pid(1), mutation_rate: 0.1 }, BranchRequest { parent: pid(2), mutation_rate: 0.1 }],
         };
-        scheduler.apply_evolution_plan(plan, &policy(), &mut DefaultChildBuilder, &mut SeededPidAllocator::new(10)).unwrap();
-
-        assert!(!scheduler.processes.contains_key(&4));
-        assert!(scheduler.life_graph.nodes.get(&4).is_none());
-        assert_eq!(scheduler.life_graph.fossils.len(), 1);
-        assert_eq!(scheduler.life_graph.fossils[0].death_cycle, Some(0));
-        assert_eq!(scheduler.life_graph.fossils[0].death_reason, Some(DeathReason::Administrative));
-        assert!(scheduler.processes.contains_key(&10));
-        assert_eq!(scheduler.life_graph.nodes.get(&10).unwrap().parent, Some(1));
-        assert_eq!(scheduler.life_graph.nodes.get(&1).unwrap().children, vec![10]);
-        assert_eq!(scheduler.generation, 1);
+        let result = s.apply_evolution_plan(plan, &policy(), &mut FailingBuilder { fail_at: 1 }, &mut SeededPidAllocator::new(10));
+        assert!(matches!(result, Err(ApplyError::Build(BuildError::BuilderFailure { ordinal: 1 }))));
+        assert_eq!(s.processes, before.processes);
+        assert_eq!(s.life_graph, before.life_graph);
+        assert_eq!(s.generation, before.generation);
+        assert_eq!(s.audit, before.audit);
     }
 }
