@@ -1,4 +1,4 @@
-# EEC-003 execution is chained from successful EEC-001 on the default branch.
+# EEC-003 target execution is hosted by the trusted default-branch workflow.
 name: EEC-003 Environment Revalidation
 
 on:
@@ -14,11 +14,5 @@ jobs:
     name: EEC-003 environment revalidation
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout exact candidate commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Experimental harness delegated to EEC-003 execution workflow
-        run: |
-          set -euo pipefail
-          echo 'EEC-003 execution workflow is registered on main.'
+      - name: Execution registration marker
+        run: echo 'EEC-003 target execution is hosted by .github/workflows/eec-003-execution.yml'
