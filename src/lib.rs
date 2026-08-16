@@ -312,7 +312,7 @@ impl PhiScheduler {
             if self.processes.contains_key(&pid) || !pending_pids.insert(pid) {
                 return Err(ApplyError::Build(BuildError::PidCollision { pid }));
             }
-            pending.push(builder.build_child(parent, pid, request.mutation_rate, ordinal)?);
+            pending.push(builder.build_child(parent, pid, request.mutation_rate, ordinal).map_err(ApplyError::Build)?);
         }
 
         let generation_before = self.generation;
