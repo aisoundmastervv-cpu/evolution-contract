@@ -1,0 +1,1 @@
+The implementation lives on `agent/h3-a2-runner` and is intentionally separate from the registered A2 protocol. This branch is an execution candidate and has no scientific outcome.
