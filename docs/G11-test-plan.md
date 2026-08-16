@@ -28,6 +28,24 @@ Tests may operationalize the frozen predicates. They may not add new semantic re
 | O1-C | Build-then-commit atomicity | A failed child build causes committed evolution mutation, including deaths, children, generation advance, or LifeGraph mutation |
 | O1-D | Temporal tolerance | A stale request becomes a plan-wide failure or invalidates an unrelated valid request |
 
+## Traceability matrix
+
+Every semantic test case must map to an already-frozen oracle predicate and an already-frozen Contract v1.0 rule. The matrix is closed: adding a case requires a documented reason that it is needed to operationalize an existing predicate; it may not introduce a new semantic requirement.
+
+| Test | Role | Oracle | Contract v1.0 source | Frozen expected observation |
+|---|---|---|---|---|
+| TC-P01 | Control | O1-A | §1 Protection and capability safety | Eligible target can be represented at the capability boundary; no O1-A failure |
+| TC-P02 | Control | O1-C | §5 Build phase | Valid fixture reaches build-success path; no O1-C failure |
+| TC-P03 | Positive | O1-D | §4 Temporal tolerance | Stale request is individually tolerated and unrelated valid request remains eligible |
+| TC-N01 | Negative | O1-A | §1 Protection and capability safety | `Immune`/`Protected` target is not admitted |
+| TC-N02 | Negative | O1-B | §3 Structural validation | Structurally invalid plan produces zero evolution-state mutation |
+| TC-N03 | Negative | O1-C | §5 Build phase | Build failure produces no committed deaths, children, generation advance, or LifeGraph mutation |
+| TC-N04 | Negative | O1-D | §4 Temporal tolerance | Stale request does not cause plan-wide failure or invalidate unrelated valid request |
+| TC-B01 | Boundary | O1-B | §3 Structural validation | Invalid plan remains zero-mutation despite earlier mutation opportunities |
+| TC-B02 | Boundary | O1-C | §5 Build phase | Build failure remains zero committed evolution despite earlier mutation opportunities |
+| TC-B03 | Boundary | O1-D | §4 Temporal tolerance | Stale request does not invalidate unrelated valid work in either ordering |
+| TC-B04 | Boundary | O1-A | §1 Protection and capability safety | Structural validity cannot bypass capability safety |
+
 ## Positive / control cases
 
 These cases are controls and operational coverage. They do **not** create a new semantic success oracle beyond O1.
