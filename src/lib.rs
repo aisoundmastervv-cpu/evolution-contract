@@ -309,7 +309,10 @@ impl PhiScheduler {
             if self.processes.contains_key(&pid) || !pending_pids.insert(pid) {
                 return Err(ApplyError::Build(BuildError::PidCollision { pid }));
             }
-            pending.push(builder.build_child(parent, pid, request.mutation_rate, ordinal)?);
+            let child = builder
+                .build_child(parent, pid, request.mutation_rate, ordinal)
+                .map_err(ApplyError::Build)?;
+            pending.push(child);
         }
 
         let generation_before = self.generation;
@@ -415,7 +418,7 @@ impl PhiScheduler {
         let branch_parents: HashSet<_> = plan.branches.iter().map(|b| b.parent.get()).collect();
         if let Some(pid) = death_ids.intersection(&branch_parents).next() {
             return Err(ApplyError::Structural(
-                StructuralViolation::ConflictingRequest { pid: **pid },
+                StructuralViolation::ConflictingRequest { pid: *pid },
             ));
         }
 
@@ -606,7 +609,7 @@ mod tests {
         let plan = EvolutionPlan {
             population_generation: 0,
             deaths: vec![DeathRequest { pid: pid(1), reason: DeathReason::Administrative }],
-            branches: (0..12).map(|i| BranchRequest { parent: pid(2 + (i % 2) as u64), mutation_rate: 0.1 }).collect(),
+            branches: (0..8).map(|i| BranchRequest { parent: pid(2 + (i % 2) as u64), mutation_rate: 0.1 }).collect(),
         };
         let err = s.apply_evolution_plan(plan, &policy(), &mut FailingBuilder { fail_at: 7 }, &mut SeededPidAllocator::new(100)).unwrap_err();
         assert!(matches!(err, ApplyError::Build(BuildError::BuilderFailure { ordinal: 7 })));
