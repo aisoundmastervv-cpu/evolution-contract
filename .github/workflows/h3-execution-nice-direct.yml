@@ -1,0 +1,115 @@
+name: H3 Direct Nice Execution
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - h3/design-requirements-v1
+
+jobs:
+  h3-nice-direct:
+    name: H3 A1 direct execution
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Execute pre-registered A1 nice arm
+        shell: bash
+        env:
+          REGISTRATION_SHA: 582b737319b02993ec3909c55b7eea144c44bccb
+        run: |
+          set -euo pipefail
+          mkdir -p h3-nice-evidence
+          printf 'registration_sha=%s\n' "$REGISTRATION_SHA" > execution-registration.txt
+          printf '%s\n' 'H3 A1 nice execution evidence' > h3-nice-evidence/README.txt
+          printf 'registration_sha=%s\n' "$REGISTRATION_SHA" >> h3-nice-evidence/README.txt
+          uname -a > h3-nice-evidence/environment.txt
+          python3 --version >> h3-nice-evidence/environment.txt
+          nproc >> h3-nice-evidence/environment.txt
+          CLK_TCK=$(getconf CLK_TCK)
+          echo "CLK_TCK=$CLK_TCK" >> h3-nice-evidence/environment.txt
+          echo "cpu_affinity=0" >> h3-nice-evidence/environment.txt
+          echo 'trial,gene,intervention_nice,control_cpu_usec,intervention_cpu_usec,ratio,control_nice_actual,intervention_nice_actual,control_exit,intervention_exit,valid' > h3-nice-evidence/trials.csv
+
+          cpu_usec() {
+            local pid="$1"
+            local ticks
+            ticks=$(awk '{print $14+$15}' "/proc/$pid/stat")
+            awk -v t="$ticks" -v hz="$CLK_TCK" 'BEGIN { printf "%.0f", (t * 1000000) / hz }'
+          }
+
+          run_trial() {
+            local trial="$1" gene="$2" intervention_nice="$3"
+            local control_pid intervention_pid
+            local control_status=0 intervention_status=0
+
+            taskset -c 0 nice -n 0 python3 scripts/h3_cpu_workload.py > "h3-nice-evidence/${trial}-control.out" 2>&1 &
+            control_pid=$!
+            taskset -c 0 nice -n "$intervention_nice" python3 scripts/h3_cpu_workload.py > "h3-nice-evidence/${trial}-intervention.out" 2>&1 &
+            intervention_pid=$!
+
+            kill -STOP "$control_pid" "$intervention_pid"
+            local control_nice_actual intervention_nice_actual
+            control_nice_actual=$(ps -o ni= -p "$control_pid" | tr -d ' ')
+            intervention_nice_actual=$(ps -o ni= -p "$intervention_pid" | tr -d ' ')
+
+            local before_control before_intervention after_control after_intervention
+            before_control=$(cpu_usec "$control_pid")
+            before_intervention=$(cpu_usec "$intervention_pid")
+            kill -CONT "$control_pid" "$intervention_pid"
+            sleep 5
+            after_control=$(cpu_usec "$control_pid")
+            after_intervention=$(cpu_usec "$intervention_pid")
+
+            kill -TERM "$control_pid" "$intervention_pid" || true
+            wait "$control_pid" || control_status=$?
+            wait "$intervention_pid" || intervention_status=$?
+
+            local control_cpu=$((after_control-before_control))
+            local intervention_cpu=$((after_intervention-before_intervention))
+            local ratio
+            ratio=$(awk -v x="$intervention_cpu" -v y="$control_cpu" 'BEGIN { if (y == 0) print "inf"; else printf "%.6f", x/y }')
+
+            local valid=true
+            [[ "$control_nice_actual" == "0" ]] || valid=false
+            [[ "$intervention_nice_actual" == "$intervention_nice" ]] || valid=false
+            [[ "$control_status" == "0" ]] || valid=false
+            [[ "$intervention_status" == "0" ]] || valid=false
+            [[ "$control_cpu" -gt 0 ]] || valid=false
+            [[ "$intervention_cpu" -gt 0 ]] || valid=false
+            echo "$trial,$gene,$intervention_nice,$control_cpu,$intervention_cpu,$ratio,$control_nice_actual,$intervention_nice_actual,$control_status,$intervention_status,$valid" >> h3-nice-evidence/trials.csv
+          }
+
+          for trial in 1 2 3 4 5; do run_trial "e0-t${trial}" 0 19; done
+          for trial in 1 2 3 4 5; do run_trial "e255-t${trial}" 255 0; done
+
+          python3 - <<'PY'
+          import csv
+          from statistics import median
+          rows = list(csv.DictReader(open('h3-nice-evidence/trials.csv')))
+          e0 = [float(r['ratio']) for r in rows if r['gene'] == '0' and r['valid'] == 'true']
+          e255 = [float(r['ratio']) for r in rows if r['gene'] == '255' and r['valid'] == 'true']
+          m0 = median(e0) if e0 else None
+          m255 = median(e255) if e255 else None
+          outcome = 'INCONCLUSIVE'
+          reason = 'insufficient valid trials'
+          if len(e0) == 5 and len(e255) == 5:
+              if m0 <= 0.5 and m255 >= 2.0 * m0:
+                  outcome = 'CAUSAL SUPPORT'
+                  reason = 'registered effect criterion satisfied'
+              else:
+                  outcome = 'NULL-FALSIFICATION'
+                  reason = 'registered effect criterion not satisfied'
+          with open('h3-nice-evidence/summary.txt', 'w') as f:
+              f.write(f'outcome={outcome}\nreason={reason}\nmedian_ratio_e0={m0}\nmedian_ratio_e255={m255}\n')
+          PY
+
+      - name: Upload H3 nice evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-nice-direct-evidence
+          path: |
+            execution-registration.txt
+            h3-nice-evidence/
