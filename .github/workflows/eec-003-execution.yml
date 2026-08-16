@@ -1,10 +1,9 @@
 name: EEC-003 Execution
 
 on:
-  workflow_run:
-    workflows: [EEC-001 Agent Environment Conformance]
-    types: [completed]
-    branches: ['cloud/eec-003-environment-revalidation']
+  pull_request_target:
+    types: [synchronize]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -13,18 +12,16 @@ permissions:
 jobs:
   eec-003-environment-revalidation:
     name: EEC-003 environment revalidation
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.head_ref == 'cloud/eec-003-environment-revalidation' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Resolve candidate commit
-        id: candidate
-        shell: bash
         env:
-          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           MANUAL_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          candidate="${WORKFLOW_RUN_SHA:-$MANUAL_SHA}"
+          candidate="${PR_HEAD_SHA:-$MANUAL_SHA}"
           test -n "$candidate"
           printf 'EXPECTED_COMMIT=%s\n' "$candidate" >> "$GITHUB_ENV"
           printf 'candidate_commit=%s\n' "$candidate"
@@ -32,7 +29,7 @@ jobs:
       - name: Checkout exact candidate commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Establish initial conformant environment
@@ -133,6 +130,6 @@ EOF
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: eec-003-environment-revalidation-evidence-${{ github.event.workflow_run.head_sha || github.sha }}
+          name: eec-003-environment-revalidation-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           path: ${{ runner.temp }}/eec-003-evidence.txt
           if-no-files-found: error
