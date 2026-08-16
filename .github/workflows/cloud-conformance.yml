@@ -148,7 +148,7 @@ jobs:
           sentinel="$RUNNER_TEMP/eec-003-mutation-sentinel"
           stderr="$RUNNER_TEMP/eec-003-reentry-stderr.txt"
           rm -f "$sentinel" "$stderr"
-          if EXPECTED_ENVIRONMENT_ID="$EXPECTED_ENVIRONMENT_ID" bash scripts/agent-mutation-entrypoint.sh "$EXPECTED_COMMIT" -- touch "$sentinel" 2>"$stderr"; then
+          if EXPECTED_ENVIRONMENT_ID="$EXPECTED_ENVIRONMENT_ID" bash scripts/agent-mutation-entrypoint.sh "$EXPECTED_COMMIT" -- touch "$sentinel" >"$stderr" 2>&1; then
             echo 'EEC-003: FAIL — mutation entrypoint accepted drifted environment' >&2
             cat "$stderr" >&2
             exit 1
