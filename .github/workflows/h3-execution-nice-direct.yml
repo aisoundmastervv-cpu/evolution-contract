@@ -45,12 +45,15 @@ jobs:
             local control_pid intervention_pid
             local control_status=0 intervention_status=0
 
-            taskset -c 0 nice -n 0 python3 scripts/h3_cpu_workload.py > "h3-nice-evidence/${trial}-control.out" 2>&1 &
+            taskset -c 0 python3 scripts/h3_cpu_workload.py > "h3-nice-evidence/${trial}-control.out" 2>&1 &
             control_pid=$!
-            taskset -c 0 nice -n "$intervention_nice" python3 scripts/h3_cpu_workload.py > "h3-nice-evidence/${trial}-intervention.out" 2>&1 &
+            taskset -c 0 python3 scripts/h3_cpu_workload.py > "h3-nice-evidence/${trial}-intervention.out" 2>&1 &
             intervention_pid=$!
 
             kill -STOP "$control_pid" "$intervention_pid"
+            renice -n 0 -p "$control_pid" > "h3-nice-evidence/${trial}-control-renice.txt"
+            renice -n "$intervention_nice" -p "$intervention_pid" > "h3-nice-evidence/${trial}-intervention-renice.txt"
+
             local control_nice_actual intervention_nice_actual
             control_nice_actual=$(ps -o ni= -p "$control_pid" | tr -d ' ')
             intervention_nice_actual=$(ps -o ni= -p "$intervention_pid" | tr -d ' ')
