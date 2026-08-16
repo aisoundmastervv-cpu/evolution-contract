@@ -12,7 +12,7 @@ mod validation_executor;
 
 use cloud_executor_adapter::{
     execute_approved_once, ArtifactId, ExecutionContext, ExecutionIdentity, ExecutionOutcome,
-    FileExecutionStore, OperationalFailure, ReferenceExecutorInvoker,
+    ExecutorIdentity, FileExecutionStore, OperationalFailure, ReferenceExecutorInvoker,
 };
 use validation_executor::{ExecutionOutcome as ExecutorOutcome, Executor, MachineState, Transition};
 
@@ -54,7 +54,7 @@ fn main() {
         }
     };
 
-    let context = runtime_context(ExecutionIdentity(execution_id.into()));
+    let context = runtime_context(ExecutionIdentity(execution_id));
     let mut invoker = ValidationExecutorInvoker {
         executor: Executor::new(MachineState::ObservationRequired),
         transition,
@@ -130,7 +130,7 @@ fn runtime_context(execution: ExecutionIdentity) -> ExecutionContext {
         ]
         .into_iter()
         .collect(),
-        executor: cloud_executor_adapter::substrate::ExecutorIdentity {
+        executor: ExecutorIdentity {
             version: ArtifactId("executor@approved".into()),
         },
         scope: ArtifactId("scope@production-candidate".into()),
