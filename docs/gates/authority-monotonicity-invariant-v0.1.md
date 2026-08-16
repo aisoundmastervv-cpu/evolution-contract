@@ -16,7 +16,7 @@ For every derived authorization artifact `C` and its parent canonical authority 
 ```text
 AUTHORIZED(C) =>
     VALID(P)
-    AND VALID_EXECUTOR_SEMANTICS(C)
+    AND VALID_EXECUTION_SEMANTICS_BINDING(C)
     AND EFFECTS(C) subset_of EFFECTS(P)
     AND CAPABILITY(C) subset_of CAPABILITY(P)
     AND OBJECT(C) = OBJECT(P)
@@ -39,6 +39,7 @@ replace authority
 reinterpret authority
 change the parent object/revision
 change the executor semantics under which effects are evaluated
+leave an authority-relevant semantic dependency unbound
 ```
 
 Any broader authority requires a new canonical governance event at the appropriate authority domain.
@@ -156,11 +157,136 @@ If two executions can legitimately produce different effect sets while claiming 
 
 A semantics change that can alter authority-relevant effects requires a new canonical executor-semantics/effect-model revision and a new applicable governance event.
 
-## 5. Semantic effects and composition closure
+## 5. Complete execution-semantics dependency closure
+
+A semantics hash proves integrity only for the bytes or canonical representation that was hashed. It does not, by itself, prove that all authority-relevant semantic inputs are bound.
+
+Therefore every authority-bearing execution context MUST define a complete canonical dependency closure for authority-relevant effects.
+
+At minimum, the binding MUST account for:
+
+```text
+executor_artifact_hash
+executor_semantics_hash
+effect_model_hash
+runtime_identity_or_hash
+dependency_lock_hash
+configuration_hash
+environment_policy_hash
+sandbox_policy_hash
+```
+
+Where applicable, the closure MUST additionally bind or explicitly prohibit:
+
+```text
+kernel / host policy
+ambient credentials
+external service identities or policy
+DNS / endpoint resolution policy
+clock / time-source semantics
+hardware capability relevant to effects
+dynamic plugins / loaded modules
+filesystem / mount policy
+network routing / egress policy
+resource enforcement policy
+```
+
+The exact closure is authority-domain specific, but it MUST be explicit and canonical. An authority-relevant dependency cannot remain ambient merely because it is inconvenient to hash.
+
+### 5.1 Semantic dependency function
+
+The effective effects MUST be modeled as a function of the complete bound semantic context:
+
+```text
+EFFECTS = F(
+    CAPABILITY,
+    EXECUTOR_ARTIFACT,
+    EXECUTOR_SEMANTICS,
+    EFFECT_MODEL,
+    RUNTIME,
+    DEPENDENCIES,
+    CONFIGURATION,
+    ENVIRONMENT_POLICY,
+    SANDBOX_POLICY,
+    OTHER_DECLARED_AUTHORITY_RELEVANT_INPUTS
+)
+```
+
+For a valid authorization:
+
+```text
+all authority-relevant inputs to F
+    are either
+        canonically bound
+    or
+        explicitly declared irrelevant / prohibited
+```
+
+If an authority-relevant input is outside the declared dependency closure, the execution-semantics binding is incomplete and authorization MUST be rejected.
+
+### 5.2 Semantic-binding invariant
+
+The required invariant is not merely:
+
+```text
+same hashes => same effects
+```
+
+It is:
+
+```text
+same complete canonical semantic closure
+    =>
+unique authority-relevant effects
+```
+
+Conversely:
+
+```text
+unbound authority-relevant dependency
+    =>
+semantic binding incomplete
+    =>
+NOT_AUTHORIZED
+```
+
+A change to any authority-relevant dependency that can alter effective effects requires a new canonical semantics/dependency revision and a new applicable governance event.
+
+### 5.3 Counterexample closed by this requirement
+
+Construct two execution contexts with identical recorded hashes:
+
+```text
+C1:
+    all recorded bindings = H1..Hn
+
+C2:
+    all recorded bindings = H1..Hn
+```
+
+but allow one authority-relevant semantic dependency outside the declared closure to differ:
+
+```text
+ambient credential
+network policy
+runtime behavior
+external endpoint policy
+kernel policy
+```
+
+If:
+
+```text
+EFFECTS(C1) != EFFECTS(C2)
+```
+
+then the recorded binding was incomplete. `C2` (and the authority model generally) MUST NOT be accepted as authorized until the dependency closure is expanded and canonically bound.
+
+## 6. Semantic effects and composition closure
 
 Dimension-wise containment is necessary but not sufficient. A combination of individually permitted dimensions MUST NOT create an effect that is absent from the parent authority.
 
-`EFFECTS(X,S)` is the closed, machine-evaluable set of security-relevant and authority-relevant effects that execution of `X` can cause or obtain under exact executor semantics `S`.
+`EFFECTS(X,S)` is the closed, machine-evaluable set of security-relevant and authority-relevant effects that execution of `X` can cause or obtain under exact executor semantics `S` and its complete dependency closure.
 
 For every valid child:
 
@@ -171,7 +297,7 @@ EFFECTS(C,S_C) subset_of EFFECTS(P,S_P)
 and, unless a new canonical governance event explicitly authorizes a changed semantics boundary:
 
 ```text
-S_C = S_P
+SEMANTIC_BINDING(C) = SEMANTIC_BINDING(P)
 ```
 
 The effect relation MUST account for composition across dimensions. In particular, the evaluator MUST consider interactions such as:
@@ -189,7 +315,7 @@ A child is invalid if the combination of individually contained dimensions enabl
 
 Therefore, checking each dimension independently is not sufficient to establish monotonicity.
 
-## 6. Semantic aliasing closure
+## 7. Semantic aliasing closure
 
 Different representations MUST be normalized to the same semantic capability before containment is evaluated.
 
@@ -216,7 +342,7 @@ when the former necessarily grants the latter under the executor semantics.
 
 The normalization function is part of the closed authority domain. A child cannot choose a representation whose semantics are stronger than the represented capability.
 
-## 7. Monotonic authority flow
+## 8. Monotonic authority flow
 
 The normative direction is:
 
@@ -251,32 +377,32 @@ Evidence flows upward through append-only observation and independent evaluation
 
 Neither flow may cross the other's authority boundary.
 
-## 8. Token non-amplification
+## 9. Token non-amplification
 
 A future `AuthorizedExecutionToken` is a proof/reference derived from an already valid canonical `EXECUTION_AUTHORIZED` event. It is not an independent source of authority.
 
-The token MUST satisfy both:
+The token MUST satisfy all of the following:
 
 ```text
 CAPABILITY(TOKEN) subset_of CAPABILITY(AUTHORIZATION)
-EFFECTS(TOKEN,S_TOKEN) subset_of EFFECTS(AUTHORIZATION,S_AUTHORIZATION)
-S_TOKEN = S_AUTHORIZATION
+EFFECTS(TOKEN,SEMANTIC_BINDING_TOKEN) subset_of EFFECTS(AUTHORIZATION,SEMANTIC_BINDING_AUTHORIZATION)
+SEMANTIC_BINDING_TOKEN = SEMANTIC_BINDING_AUTHORIZATION
 ```
 
 unless a separately authorized semantics transition explicitly governs the change.
 
-The token MUST NOT introduce a new contract, plan, baseline, oracle, executor specification, executor semantics, effect model, environment, input, resource boundary, side effect, network permission, persistence permission, delegation right, or execution count outside the parent authorization.
+The token MUST NOT introduce a new contract, plan, baseline, oracle, executor specification, executor semantics, effect model, runtime, dependency set, environment policy, sandbox policy, input, resource boundary, side effect, network permission, persistence permission, delegation right, or execution count outside the parent authorization.
 
 A token that cannot demonstrate these bindings is invalid.
 
-## 9. Non-escalation across layers
+## 10. Non-escalation across layers
 
 For every authority-bearing transition:
 
 ```text
 child_capability subset_of parent_capability
 child_effects   subset_of parent_effects
-child_semantics = parent_semantics
+child_semantic_binding = parent_semantic_binding
 ```
 
 In particular:
@@ -298,7 +424,7 @@ Verdict
     cannot retroactively create Authorization
 ```
 
-## 10. No implicit authority inheritance
+## 11. No implicit authority inheritance
 
 Authority does not propagate merely because two artifacts share:
 
@@ -313,7 +439,7 @@ Authority does not propagate merely because two artifacts share:
 
 Propagation requires an explicit canonical parent relation and a valid bounded derivation.
 
-## 11. Required executor rejection conditions
+## 12. Required executor rejection conditions
 
 The executor MUST reject a derived authorization artifact if any of the following holds:
 
@@ -329,6 +455,9 @@ executor semantics mismatch
 executor semantics revision substituted
 missing effect model
 semantic effect model under-specified
+incomplete semantic dependency closure
+unbound authority-relevant dependency
+semantic binding mismatch
 scope broadened
 validity broadened
 object changed
@@ -347,7 +476,7 @@ NOT_AUTHORIZED
 
 The executor must not infer authorization from operational success, artifact existence, or subject claims.
 
-## 12. Governance test obligations
+## 13. Governance test obligations
 
 The following adversarial cases must remain false:
 
@@ -435,7 +564,13 @@ Two executions claim the same capability vector and exact semantics revision but
 
 Expected: `NOT_AUTHORIZED` until the effect model is made deterministic and canonical.
 
-## 13. Status boundary
+### AUTH-MONO-015 — unbound semantic dependency
+
+Two execution contexts have identical recorded hashes and capability claims, but an authority-relevant dependency outside the declared semantic closure differs and changes effective effects.
+
+Expected: `NOT_AUTHORIZED` until the dependency closure is explicitly expanded and canonically bound.
+
+## 14. Status boundary
 
 ```text
 DESIGN STATUS: DRAFT
