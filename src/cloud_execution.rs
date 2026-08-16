@@ -71,7 +71,7 @@ pub enum RecoveryDecision {
 }
 
 pub trait ReferenceExecutorInvoker {
-    type Error;
+    type Error: Into<OperationalFailure>;
 
     fn invoke(&mut self, context: &ExecutionContext) -> Result<(), Self::Error>;
 }
@@ -110,6 +110,49 @@ impl ExecutionStore for InMemoryExecutionStore {
     }
 }
 
+pub fn execute_once<I: ReferenceExecutorInvoker, S: ExecutionStore>(
+    invoker: &mut I,
+    store: &mut S,
+    context: ExecutionContext,
+    trace_ref: ArtifactId,
+    evidence_ref: ArtifactId,
+) -> ExecutionAttempt {
+    let attempt_number = store
+        .load(&context.execution)
+        .map(|record| record.attempts.len() as u32 + 1)
+        .unwrap_or(1);
+
+    let outcome = match invoker.invoke(&context) {
+        Ok(()) => ExecutionOutcome::Completed,
+        Err(error) => ExecutionOutcome::Aborted {
+            reason: error.into(),
+        },
+    };
+
+    let attempt = ExecutionAttempt {
+        execution: context.execution.clone(),
+        attempt: attempt_number,
+        context: context.clone(),
+        outcome,
+    };
+
+    let mut attempts = store
+        .load(&context.execution)
+        .map(|record| record.attempts.clone())
+        .unwrap_or_default();
+    attempts.push(attempt.clone());
+
+    store.persist(PersistedExecution {
+        context: context.clone(),
+        attempts,
+        machine_state_ref: context.machine_state,
+        trace_ref,
+        evidence_ref,
+    });
+
+    attempt
+}
+
 pub fn retry_context(previous: &ExecutionAttempt) -> ExecutionContext {
     previous.context.clone()
 }
@@ -119,10 +162,13 @@ pub fn recover(persisted: Option<&PersistedExecution>) -> RecoveryDecision {
         return RecoveryDecision::FailClosed(OperationalFailure::StateUnavailable);
     };
 
-    if record
-        .attempts
-        .iter()
-        .any(|attempt| attempt.context != record.context)
+    if record.machine_state_ref != record.context.machine_state
+        || record
+            .attempts
+            .iter()
+            .any(|attempt| {
+                attempt.execution != record.context.execution || attempt.context != record.context
+            })
     {
         return RecoveryDecision::FailClosed(OperationalFailure::StateInconsistent);
     }
@@ -133,6 +179,23 @@ pub fn recover(persisted: Option<&PersistedExecution>) -> RecoveryDecision {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct TestInvoker {
+        calls: usize,
+        failure: Option<OperationalFailure>,
+    }
+
+    impl ReferenceExecutorInvoker for TestInvoker {
+        type Error = OperationalFailure;
+
+        fn invoke(&mut self, _context: &ExecutionContext) -> Result<(), Self::Error> {
+            self.calls += 1;
+            match self.failure.clone() {
+                Some(error) => Err(error),
+                None => Ok(()),
+            }
+        }
+    }
 
     fn context() -> ExecutionContext {
         let mut artifacts = BTreeMap::new();
@@ -161,38 +224,82 @@ mod tests {
     }
 
     #[test]
-    fn retry_reuses_authorized_context() {
+    fn executor_invocation_is_recorded_as_an_execution_attempt() {
         let ctx = context();
-        let attempt = ExecutionAttempt {
-            execution: ctx.execution.clone(),
-            attempt: 1,
-            context: ctx.clone(),
-            outcome: ExecutionOutcome::Aborted {
-                reason: OperationalFailure::WorkerTerminated,
-            },
+        let mut invoker = TestInvoker {
+            calls: 0,
+            failure: None,
         };
+        let mut store = InMemoryExecutionStore::new();
 
-        assert_eq!(retry_context(&attempt), ctx);
+        let attempt = execute_once(
+            &mut invoker,
+            &mut store,
+            ctx.clone(),
+            ArtifactId("trace@1".into()),
+            ArtifactId("evidence@1".into()),
+        );
+
+        assert_eq!(invoker.calls, 1);
+        assert_eq!(attempt.attempt, 1);
+        assert_eq!(attempt.execution, ctx.execution);
+        assert_eq!(attempt.outcome, ExecutionOutcome::Completed);
+        assert_eq!(store.load(&attempt.execution).unwrap().attempts.len(), 1);
     }
 
     #[test]
     fn operational_failure_remains_non_semantic() {
         let ctx = context();
-        let attempt = ExecutionAttempt {
-            execution: ctx.execution.clone(),
-            attempt: 1,
-            context: ctx,
-            outcome: ExecutionOutcome::Aborted {
-                reason: OperationalFailure::NetworkInterrupted,
-            },
+        let mut invoker = TestInvoker {
+            calls: 0,
+            failure: Some(OperationalFailure::NetworkInterrupted),
         };
+        let mut store = InMemoryExecutionStore::new();
 
-        assert!(matches!(
+        let attempt = execute_once(
+            &mut invoker,
+            &mut store,
+            ctx,
+            ArtifactId("trace@1".into()),
+            ArtifactId("evidence@1".into()),
+        );
+
+        assert_eq!(
             attempt.outcome,
             ExecutionOutcome::Aborted {
                 reason: OperationalFailure::NetworkInterrupted
             }
-        ));
+        );
+    }
+
+    #[test]
+    fn retry_reuses_context_and_creates_distinct_attempt() {
+        let ctx = context();
+        let mut invoker = TestInvoker {
+            calls: 0,
+            failure: Some(OperationalFailure::WorkerTerminated),
+        };
+        let mut store = InMemoryExecutionStore::new();
+
+        let first = execute_once(
+            &mut invoker,
+            &mut store,
+            ctx.clone(),
+            ArtifactId("trace@1".into()),
+            ArtifactId("evidence@1".into()),
+        );
+        let retry = execute_once(
+            &mut invoker,
+            &mut store,
+            retry_context(&first),
+            ArtifactId("trace@2".into()),
+            ArtifactId("evidence@2".into()),
+        );
+
+        assert_eq!(first.context, retry.context);
+        assert_eq!(first.attempt, 1);
+        assert_eq!(retry.attempt, 2);
+        assert_eq!(store.load(&ctx.execution).unwrap().attempts.len(), 2);
     }
 
     #[test]
@@ -204,7 +311,7 @@ mod tests {
     }
 
     #[test]
-    fn recovery_inconsistent_attempt_fails_closed() {
+    fn recovery_inconsistent_state_fails_closed() {
         let ctx = context();
         let mut attempt_context = ctx.clone();
         attempt_context.machine_state = ArtifactId("state@different".into());
