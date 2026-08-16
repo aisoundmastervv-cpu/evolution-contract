@@ -3,7 +3,7 @@ name: EEC-003 Actions Diagnostic
 on:
   push:
     branches:
-      - cloud/eec-003-diagnostic
+      - 'cloud/eec-003-diagnostic'
   workflow_dispatch:
 
 permissions:
