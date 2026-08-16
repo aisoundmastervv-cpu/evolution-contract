@@ -130,7 +130,7 @@ fn authorized_next_state(
     match (state, transition) {
         (FrozenInput, Transition::PlanAuthorize) => Some(PlanAuthorized),
         (PlanAuthorized, Transition::RequireObservation) => Some(ObservationRequired),
-        (PlanAuthorized, Transition::Verdict(Verdict::Untested)) => Some(Verdict),
+        (PlanAuthorized, Transition::Verdict(Verdict::Untested)) => Some(MachineState::Verdict),
         (ObservationRequired, Transition::ObservationExecute) => Some(ObservationExecuted),
         (ObservationRequired, Transition::ObservationUnavailable) => Some(ObservationUnavailable),
         (ObservationExecuted, Transition::CollectEvidence) => Some(EvidenceCollected),
