@@ -21,7 +21,8 @@ jobs:
         run: |
           set -euo pipefail
           git cat-file -e "$REGISTRATION_SHA:H3_EXECUTION_ARM.md"
-          test "$(git show "$REGISTRATION_SHA:H3_EXECUTION_ARM.md" | sha256sum | awk '{print $1}')" = "$(git show "$REGISTRATION_SHA:H3_EXECUTION_ARM.md" | sha256sum | awk '{print $1}')"
+          git show "$REGISTRATION_SHA:H3_EXECUTION_ARM.md" | grep -F 'Mapping ID: A2-cgroup-linear-v1'
+          git show "$REGISTRATION_SHA:H3_EXECUTION_ARM.md" | grep -F 'cpu.weight(e) = 100 + floor(9900 * e / 255)'
           echo "registration_sha=$REGISTRATION_SHA" | tee execution-registration.txt
 
       - name: Run registered execution arm
@@ -79,21 +80,15 @@ jobs:
             after_intervention=$(awk '$1=="usage_usec" {print $2}' "h3-evidence/${trial}-intervention-after.stat")
 
             kill -TERM "$control_pid" "$intervention_pid" || true
+            control_status=0
+            intervention_status=0
             wait "$control_pid" || control_status=$?
             wait "$intervention_pid" || intervention_status=$?
-            control_status=${control_status:-0}
-            intervention_status=${intervention_status:-0}
 
             local control_cpu=$((after_control-before_control))
             local intervention_cpu=$((after_intervention-before_intervention))
             local ratio
-            ratio=$(python3 - "$intervention_cpu" "$control_cpu" <<'PY'
-import sys
-x = int(sys.argv[1])
-y = int(sys.argv[2])
-print("inf" if y == 0 else f"{x/y:.6f}")
-PY
-)
+            ratio=$(awk -v x="$intervention_cpu" -v y="$control_cpu" 'BEGIN { if (y == 0) print "inf"; else printf "%.6f", x/y }')
 
             local valid=true
             [[ "$control_status" == "0" ]] || valid=false
@@ -109,35 +104,35 @@ PY
           for trial in 1 2 3 4 5; do run_trial "e255-t${trial}" 255 10000; done
 
           python3 - <<'PY'
-import csv
-from statistics import median
+          import csv
+          from statistics import median
 
-rows = list(csv.DictReader(open('h3-evidence/trials.csv')))
-e0 = [float(r['ratio']) for r in rows if r['gene'] == '0' and r['valid'] == 'true']
-e255 = [float(r['ratio']) for r in rows if r['gene'] == '255' and r['valid'] == 'true']
+          rows = list(csv.DictReader(open('h3-evidence/trials.csv')))
+          e0 = [float(r['ratio']) for r in rows if r['gene'] == '0' and r['valid'] == 'true']
+          e255 = [float(r['ratio']) for r in rows if r['gene'] == '255' and r['valid'] == 'true']
 
-outcome = 'INCONCLUSIVE'
-reason = 'insufficient valid trials'
-if len(e0) == 5 and len(e255) == 5:
-    m0 = median(e0)
-    m255 = median(e255)
-    if 0.5 <= m0 <= 2.0 and m255 >= 2.0 * m0:
-        outcome = 'CAUSAL SUPPORT'
-        reason = 'registered effect criterion satisfied'
-    else:
-        outcome = 'NULL-FALSIFICATION'
-        reason = 'registered effect criterion not satisfied'
-else:
-    m0 = median(e0) if e0 else None
-    m255 = median(e255) if e255 else None
+          outcome = 'INCONCLUSIVE'
+          reason = 'insufficient valid trials'
+          if len(e0) == 5 and len(e255) == 5:
+              m0 = median(e0)
+              m255 = median(e255)
+              if 0.5 <= m0 <= 2.0 and m255 >= 2.0 * m0:
+                  outcome = 'CAUSAL SUPPORT'
+                  reason = 'registered effect criterion satisfied'
+              else:
+                  outcome = 'NULL-FALSIFICATION'
+                  reason = 'registered effect criterion not satisfied'
+          else:
+              m0 = median(e0) if e0 else None
+              m255 = median(e255) if e255 else None
 
-with open('h3-evidence/summary.txt', 'w') as f:
-    f.write(f'outcome={outcome}\n')
-    f.write(f'reason={reason}\n')
-    f.write(f'median_ratio_e0={m0}\n')
-    f.write(f'median_ratio_e255={m255}\n')
-    f.write('registration_sha=358bff2d5be2c0a38822a04f7c3deadaf004c28c\n')
-PY
+          with open('h3-evidence/summary.txt', 'w') as f:
+              f.write(f'outcome={outcome}\n')
+              f.write(f'reason={reason}\n')
+              f.write(f'median_ratio_e0={m0}\n')
+              f.write(f'median_ratio_e255={m255}\n')
+              f.write('registration_sha=358bff2d5be2c0a38822a04f7c3deadaf004c28c\n')
+          PY
 
       - name: Upload H3 execution evidence
         uses: actions/upload-artifact@v4
