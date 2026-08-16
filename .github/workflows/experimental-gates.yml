@@ -21,12 +21,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Verify baseline commit and ancestry
         run: |
           git cat-file -e "${BASELINE_SHA}^{commit}"
           git merge-base --is-ancestor "$BASELINE_SHA" "$GITHUB_SHA"
-
       - name: Verify locked scaffold identity
         run: |
           test "$(git rev-parse "${BASELINE_SHA}:src/lib.rs")" = "$BASELINE_LIB_BLOB"
@@ -60,7 +58,6 @@ jobs:
           echo 'EVIDENCE: 6/6 passed'
 
   quality:
-    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'h2-') || startsWith(github.head_ref, 'experiment/') }}
     name: quality advisory
     needs: execution
     if: ${{ always() && (github.event_name != 'pull_request' || startsWith(github.head_ref, 'h2-') || startsWith(github.head_ref, 'experiment/')) }}
