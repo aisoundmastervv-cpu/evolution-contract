@@ -1,0 +1,35 @@
+name: Diagnose clippy gate
+
+on:
+  push:
+    branches: [validation/real-two-fix]
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Capture clippy output
+        run: |
+          set +e
+          cargo clippy --all-targets -- -D warnings 2>&1 | tee CLIPPY_DIAGNOSTIC.txt
+          status=${PIPESTATUS[0]}
+          echo "CLIPPY_EXIT_CODE=$status" >> CLIPPY_DIAGNOSTIC.txt
+          exit 0
+      - name: Commit diagnostic and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/clippy-diagnostic.yml
+          git add CLIPPY_DIAGNOSTIC.txt
+          git add -u
+          git commit -m "Record clippy diagnostic"
+          git push
