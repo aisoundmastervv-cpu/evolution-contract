@@ -16,6 +16,7 @@ For every derived authorization artifact `C` and its parent canonical authority 
 ```text
 AUTHORIZED(C) =>
     VALID(P)
+    AND EFFECTS(C) subset_of EFFECTS(P)
     AND CAPABILITY(C) subset_of CAPABILITY(P)
     AND OBJECT(C) = OBJECT(P)
     AND REVISION(C) = REVISION(P)
@@ -97,7 +98,61 @@ TOKEN_EXEC_COUNT    <= AUTHORIZED_EXEC_COUNT
 
 A token/child that preserves identifiers but broadens any capability dimension is invalid.
 
-## 4. Monotonic authority flow
+## 4. Semantic effects and composition closure
+
+Dimension-wise containment is necessary but not sufficient. A combination of individually permitted dimensions MUST NOT create an effect that is absent from the parent authority.
+
+`EFFECTS(X)` is the closed, machine-evaluable set of security-relevant and authority-relevant effects that execution of `X` can cause or obtain under the applicable executor semantics.
+
+For every valid child:
+
+```text
+EFFECTS(C) subset_of EFFECTS(P)
+```
+
+The effect relation MUST account for composition across dimensions. In particular, the evaluator MUST consider interactions such as:
+
+```text
+network + inputs
+network + persistence
+inputs + side_effects
+resources + execution_count
+executor + delegation
+environment + network
+```
+
+A child is invalid if the combination of individually contained dimensions enables a new effective operation, resource, data flow, persistence path, delegation path, or side effect not contained in the parent.
+
+Therefore, checking each dimension independently is not sufficient to establish monotonicity.
+
+## 5. Semantic aliasing closure
+
+Different representations MUST be normalized to the same semantic capability before containment is evaluated.
+
+Aliases, defaults, derived values, indirect references, and equivalent executor primitives MUST NOT allow a child to evade the capability comparison.
+
+Examples of aliasing that MUST resolve to their semantic effect include:
+
+```text
+network = localhost
+network = loopback
+network = socket-to-local-service
+```
+
+when they produce the same effective network capability;
+
+and:
+
+```text
+resource = /tmp/file
+persistence = filesystem-write
+```
+
+when the former necessarily grants the latter under the executor semantics.
+
+The normalization function is part of the closed authority domain. A child cannot choose a representation whose semantics are stronger than the represented capability.
+
+## 6. Monotonic authority flow
 
 The normative direction is:
 
@@ -132,26 +187,28 @@ Evidence flows upward through append-only observation and independent evaluation
 
 Neither flow may cross the other's authority boundary.
 
-## 5. Token non-amplification
+## 7. Token non-amplification
 
 A future `AuthorizedExecutionToken` is a proof/reference derived from an already valid canonical `EXECUTION_AUTHORIZED` event. It is not an independent source of authority.
 
-The token MUST satisfy the complete capability-vector containment relation, not merely object/revision/scope/time equality:
+The token MUST satisfy both:
 
 ```text
 CAPABILITY(TOKEN) subset_of CAPABILITY(AUTHORIZATION)
+EFFECTS(TOKEN) subset_of EFFECTS(AUTHORIZATION)
 ```
 
 The token MUST NOT introduce a new contract, plan, baseline, oracle, executor specification, environment, input, resource boundary, side effect, network permission, persistence permission, delegation right, or execution count outside the parent authorization.
 
 A token that cannot demonstrate these bindings is invalid.
 
-## 6. Non-escalation across layers
+## 8. Non-escalation across layers
 
 For every authority-bearing transition:
 
 ```text
 child_capability subset_of parent_capability
+child_effects   subset_of parent_effects
 ```
 
 In particular:
@@ -173,7 +230,7 @@ Verdict
     cannot retroactively create Authorization
 ```
 
-## 7. No implicit authority inheritance
+## 9. No implicit authority inheritance
 
 Authority does not propagate merely because two artifacts share:
 
@@ -188,7 +245,7 @@ Authority does not propagate merely because two artifacts share:
 
 Propagation requires an explicit canonical parent relation and a valid bounded derivation.
 
-## 8. Required executor rejection conditions
+## 10. Required executor rejection conditions
 
 The executor MUST reject a derived authorization artifact if any of the following holds:
 
@@ -196,6 +253,9 @@ The executor MUST reject a derived authorization artifact if any of the followin
 parent invalid
 capability dimension broadened
 new capability dimension introduced
+semantic effect broadened
+capability composition creates a new effect
+semantic aliasing hides a broader capability
 scope broadened
 validity broadened
 object changed
@@ -214,7 +274,7 @@ NOT_AUTHORIZED
 
 The executor must not infer authorization from operational success, artifact existence, or subject claims.
 
-## 9. Governance test obligations
+## 11. Governance test obligations
 
 The following adversarial cases must remain false:
 
@@ -272,7 +332,25 @@ A child introduces a capability dimension that is not part of the parent's close
 
 Expected: `NOT_AUTHORIZED`.
 
-## 10. Status boundary
+### AUTH-MONO-010 — compositional amplification
+
+Every individual child capability dimension is contained in the corresponding parent dimension, but their combination enables an effect not contained in the parent.
+
+Expected: `NOT_AUTHORIZED`.
+
+### AUTH-MONO-011 — semantic aliasing
+
+A child uses a representation, alias, default, indirect reference, or executor primitive that is syntactically different but semantically broader than the parent capability.
+
+Expected: `NOT_AUTHORIZED`.
+
+### AUTH-MONO-012 — effect-set mismatch
+
+A child passes all identity and dimension checks but its derived semantic effect set exceeds the parent's effect set.
+
+Expected: `NOT_AUTHORIZED`.
+
+## 12. Status boundary
 
 ```text
 DESIGN STATUS: DRAFT
