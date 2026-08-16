@@ -1,10 +1,11 @@
-# EEC-003 execution candidate: trigger after governance-path correction on main.
+# EEC-003 execution candidate: push-triggered run on the exact candidate branch.
 name: EEC-003 Environment Revalidation
 
 on:
   push:
     branches:
       - cloud/eec-003-environment-revalidation
+      - cloud/eec-003-execution-candidate
   pull_request:
     branches:
       - main
