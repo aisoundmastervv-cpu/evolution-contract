@@ -1,4 +1,4 @@
-# H3-CAP-001 — Execution Design v0.1
+# H3-CAP-001 — Execution Design v0.2
 
 **Status:** DESIGN / NOT AUTHORIZED FOR EXECUTION
 
@@ -31,6 +31,8 @@ This design does **not** revise, repair, reinterpret, or invalidate frozen execu
 
 The historical branch remains immutable and causally closed.
 
+After this revision, the assignment rule, sample size, validity rules, estimand, evidence rule, and stopping rule are all fixed prospectively by this document. None may be changed after the first observation is materialized.
+
 ## 3. Identifiable factors
 
 The future design treats the following as distinct causal factors:
@@ -43,7 +45,7 @@ For every paired observation there is exactly one control execution and one trea
 
 The design therefore does not attempt to infer order from treatment. Order is an explicit prospective assignment variable.
 
-## 4. Prospective comparison structure
+## 4. Prospective comparison structure and assignment
 
 Each pair contains:
 
@@ -57,15 +59,34 @@ one paired comparison
 The order factor has two levels:
 
 ```text
-O = -1  treatment first, control second
-O = +1  control first, treatment second
+Z = -1  treatment first, control second
+Z = +1  control first, treatment second
 ```
 
-Future pairs MUST be allocated to both order levels using a pre-specified allocation rule with no adaptive reassignment based on observed outcomes. The design MUST target balance between the two order levels over the planned sample.
+### 4.1 Fixed sample
 
-The order assignment MUST be recorded before the pair executes and MUST be immutable after execution begins.
+The protocol schedules exactly **24 pairs**, with a target and minimum of **12 pairs in each order stratum**.
 
-The concrete randomization mechanism and exact sample count are execution-design implementation details that require separate governance review before execution authorization.
+There is **no adaptive sample extension**. If fewer than 12 valid pairs are available in either order stratum after the 24 scheduled pairs, the prospective result is `INCONCLUSIVE`.
+
+### 4.2 Fixed allocation mechanism
+
+Order assignment MUST use **permuted blocks of four pairs**, with exactly two `Z=-1` and two `Z=+1` assignments in each block.
+
+Before the first pair executes:
+
+1. a random seed MUST be generated and recorded;
+2. the complete 24-pair allocation list MUST be generated from that seed;
+3. the allocation list MUST be materialized as an immutable pre-execution artifact;
+4. the artifact identity MUST be recorded in the execution governance context.
+
+No assignment may be regenerated, reordered, or replaced after the first observation is materialized. The seed and allocation list MUST be available in the evidence lineage.
+
+The assignment mechanism MUST NOT use workload outcome, wall time, failure status, or any post-assignment observation as an input.
+
+### 4.3 No post-hoc balancing
+
+The 24-pair schedule is fixed before execution. A failed or invalid pair is **not replaced** by a new pair selected to restore a preferred result. All 24 scheduled pair identities and their eventual validity status remain in provenance.
 
 ## 5. Primary estimand
 
@@ -96,16 +117,35 @@ where:
 - `delta` is the order-associated contribution to the paired contrast;
 - `epsilon_i` is residual pair-level variation.
 
-Under balanced prospective assignment of `Z`, `tau` is identified by the mean paired contrast across the two order strata, while the difference between the strata identifies the order contribution. Equivalently:
+With the fixed balanced allocation, the estimands are identified by the two order strata:
 
 ```text
-estimated treatment effect = mean(D | Z=+1 and Z=-1)
-order contribution          = [mean(D | Z=+1) - mean(D | Z=-1)] / 2
+mean_plus  = mean(D | Z=+1)
+mean_minus = mean(D | Z=-1)
+
+estimated treatment effect = tau_hat  = (mean_plus + mean_minus) / 2
+estimated order effect     = delta_hat = (mean_plus - mean_minus) / 2
 ```
 
 The sign convention is fixed by this document and MUST NOT be changed after observing results.
 
-## 6. Why this resolves the frozen ambiguity
+The primary analysis MUST use all valid scheduled pairs and the pre-specified stratum assignments. No pair may be reclassified between strata.
+
+## 6. Identification assumptions
+
+The causal interpretation requires all of the following prospective assumptions:
+
+1. treatment/control assignment within a pair is defined before execution;
+2. order assignment is generated independently of workload outcomes and is fixed before execution;
+3. both order strata contain the same treatment/control contrast definition;
+4. the pair is the blocking unit and pair identity is not selected after observing outcomes;
+5. the measured wall-time outcome uses the same measurement definition across both order strata;
+6. environment validity is assessed by pre-specified rules rather than by the observed treatment contrast;
+7. no execution-stage rule is changed after observing an outcome.
+
+If any assumption required for identification is shown to be false, the causal analysis MUST terminate as `INCONCLUSIVE` rather than being repaired retrospectively.
+
+## 7. Why this resolves the frozen ambiguity
 
 The frozen paired execution alternated role order deterministically, producing the diagnostic possibility that treatment/control contrast was correlated with execution position.
 
@@ -113,53 +153,109 @@ This design instead varies execution position prospectively across otherwise com
 
 A future result therefore produces two independently interpretable quantities:
 
-1. the treatment-associated component `tau`;
-2. the order-associated component `delta`.
+1. the treatment-associated component `tau_hat`;
+2. the order-associated component `delta_hat`.
 
-A large observed paired contrast that disappears or changes materially across order strata is evidence relevant to E2. A treatment-associated contrast that remains stable across the two order strata is evidence relevant to E1.
+A treatment-associated contrast that remains stable across order strata supports E1. A contrast that changes systematically with order supports E2. The pre-specified statistical decision rule below determines whether either pattern is strong enough for a causal verdict.
 
 Neither pattern is to be interpreted from a single pair or from selectively excluded observations.
 
-## 7. Prospective evidence criterion
+## 8. Prospective evidence and verdict criterion
 
-The evidence criterion is fixed before execution:
+The following rule is fixed before execution and is the sole primary decision rule for the prospective H3 analysis.
 
-### E1-supporting pattern
+For `tau_hat` and `delta_hat`, compute **two-sided 95% confidence intervals using the pre-specified paired analysis**. The exact implementation MUST use the same estimator and confidence procedure for both order strata and MUST be recorded before execution authorization.
 
-E1 may be supported only if all of the following hold in the pre-specified analysis:
+### E1-supporting verdict
 
-1. the estimated treatment effect `tau` is directionally consistent with the registered treatment hypothesis;
-2. the treatment-associated effect remains present after the order factor is included;
-3. the estimated order contribution `delta` does not by itself account for the observed treatment-associated contrast;
-4. all valid prospective pairs are included under the pre-specified validity rules;
-5. no historical pair, threshold, or analysis rule is modified to obtain the result.
+E1 may be supported only if all of the following hold:
 
-### E2-supporting pattern
+1. the 95% confidence interval for `tau_hat` excludes zero;
+2. `tau_hat` has the direction registered for the treatment hypothesis;
+3. the 95% confidence interval for `delta_hat` includes zero;
+4. at least 12 valid pairs exist in each order stratum;
+5. no identification assumption in Section 6 is violated.
 
-E2 may be supported if the prospective data show that the treatment/control contrast materially changes with execution position and the estimated order contribution explains the observed contrast to a degree that makes treatment assignment non-identifying under the pre-specified analysis.
+### E2-supporting verdict
 
-### INCONCLUSIVE pattern
+E2 may be supported only if all of the following hold:
 
-The result MUST remain `INCONCLUSIVE` if the prospective data do not provide sufficient information to discriminate E1 from E2 under the pre-specified analysis, including failure of required order balance, loss of required paired observations, or evidence that the execution environment invalidates the comparison.
+1. the 95% confidence interval for `delta_hat` excludes zero;
+2. the order-associated component changes the paired contrast in the observed direction;
+3. the 95% confidence interval for `tau_hat` includes zero **or** the pre-specified joint analysis shows that the treatment effect is not separable from the order effect;
+4. at least 12 valid pairs exist in each order stratum;
+5. no identification assumption in Section 6 is violated.
 
-No numerical threshold is introduced by this design. Any quantitative decision threshold required for a future causal verdict MUST be separately specified and governed before execution authorization.
+### Mixed/ambiguous result
 
-## 8. Validity and exclusion rules
+The result MUST remain `INCONCLUSIVE` if:
 
-Validity rules MUST be prospective and fixed before execution.
+- both confidence intervals exclude zero;
+- neither confidence interval excludes zero;
+- the confidence results cannot distinguish E1 from E2 under the fixed rule;
+- fewer than 12 valid pairs exist in either order stratum;
+- any identification assumption fails;
+- the environment invalidates the comparison;
+- required observations are missing under the validity rules.
 
-The design MUST NOT:
+No secondary analysis may override the primary verdict rule. Any exploratory analysis MUST be labelled exploratory and MUST NOT determine the causal verdict.
 
-- discard a pair because its result is inconvenient;
-- exclude an order stratum after observing its outcome;
-- change the estimand after seeing the data;
-- alter historical thresholds;
-- merge the new observations into frozen execution `31929841805`;
-- use the future result to reclassify the historical `INCONCLUSIVE` verdict.
+## 9. Validity and exclusion rules
 
-Any invalid pair must be retained in the provenance record with its explicit invalidity reason. It MUST NOT silently disappear from the lineage.
+Validity is determined by execution integrity, not by the observed value of `D_i`.
 
-## 9. Required recorded fields
+A scheduled pair is **valid** only if all of the following are true:
+
+1. exactly one control and one treatment execution are present;
+2. both executions use the same registered pair/workload identity;
+3. the pre-assigned order is preserved;
+4. both required wall-time observations are present and produced by the registered measurement mechanism;
+5. required environment-integrity checks pass for both executions;
+6. no forbidden mutation of workload, assignment, threshold, or governance policy occurs;
+7. the evidence artifact contains the required identity/provenance fields.
+
+A pair is **invalid** if any validity condition fails.
+
+Invalid pairs MUST:
+
+- remain in the provenance record;
+- retain their original pair identity and assigned order;
+- record an explicit invalidity reason;
+- contribute zero observations to the primary estimator;
+- count against the fixed 24-pair schedule;
+- never be replaced by a newly selected pair.
+
+The following are explicitly **not** valid reasons for exclusion:
+
+- an inconvenient treatment effect;
+- an inconvenient order effect;
+- a surprising wall time;
+- failure to match a desired hypothesis;
+- an intermediate result that appears inconclusive.
+
+No validity rule may be introduced or modified after the first observation.
+
+## 10. Fixed stopping rule
+
+The protocol stops after the **24 scheduled pairs** have reached a terminal validity state.
+
+There is no outcome-dependent early stopping and no outcome-dependent extension.
+
+The only permitted early stop is a protocol/environment failure that makes further authorized execution impossible; such a stop yields `INCONCLUSIVE` and records the reason.
+
+A complete prospective causal analysis therefore requires:
+
+```text
+24 scheduled pairs
+12 scheduled Z=-1
+12 scheduled Z=+1
+all pair validity states recorded
+at least 12 valid pairs in each stratum
+```
+
+If these conditions are not met, no E1/E2 causal verdict may be issued.
+
+## 11. Required recorded fields
 
 Every future pair must record at minimum:
 
@@ -173,11 +269,29 @@ Every future pair must record at minimum:
 - start/end or wall-time measurement;
 - validity status and reason if invalid;
 - runner/workflow revision;
-- relevant governance-policy revision.
+- relevant governance-policy revision;
+- pre-execution allocation artifact identity.
 
 The order assignment MUST be observable independently of treatment assignment in the evidence artifact.
 
-## 10. Relationship to frozen evidence
+## 12. Protocol immutability boundary
+
+After the first observation is materialized, the following are immutable for the prospective run:
+
+- order allocation mechanism;
+- generated allocation list;
+- scheduled pair count;
+- treatment/control definitions;
+- estimand and sign convention;
+- confidence procedure;
+- evidence/verdict rule;
+- validity/exclusion rules;
+- stopping rule;
+- registered thresholds and governance dependencies.
+
+Any requested change after first observation requires a **new design revision and a new governance decision**. It MUST NOT be applied to the active prospective run.
+
+## 13. Relationship to frozen evidence
 
 The historical execution remains a separate provenance branch:
 
@@ -192,7 +306,7 @@ Frozen execution 31929841805
                     |
                     +--> this execution design
                               |
-                              +--> future authorized execution
+                              +--> future separately authorized execution
                                         |
                                         +--> new evidence
                                         +--> new causal review
@@ -200,7 +314,7 @@ Frozen execution 31929841805
 
 No future execution may mutate or overwrite the frozen branch.
 
-## 11. A1 / A2 / EEC-003 dependencies
+## 14. A1 / A2 / EEC-003 dependencies
 
 This design does not silently admit execution infrastructure.
 
@@ -216,7 +330,7 @@ In particular, the previously observed A2 cgroup capability boundary is an envir
 
 If the required environment capability remains unavailable, the future execution MUST stop as `NOT AUTHORIZED` or otherwise enter the applicable non-execution state; it MUST NOT proceed by weakening the admitted environment requirement.
 
-## 12. Execution authorization boundary
+## 15. Execution authorization boundary
 
 This document is a design artifact only.
 
@@ -224,7 +338,7 @@ It does NOT authorize:
 
 - runner implementation;
 - workflow implementation;
-- execution parameter selection outside a separately approved design;
+- execution parameter selection outside this approved design;
 - A2 registration changes;
 - threshold changes;
 - execution dispatch;
@@ -242,29 +356,35 @@ New execution                NOT AUTHORIZED
 Causal verdict               NOT AVAILABLE
 ```
 
-## 13. Required next governance transition
+## 16. Required next governance transition
 
 The next governance action is a **separate review of this execution design**.
 
 That review MUST determine whether:
 
-1. the proposed order factor is causally identifiable;
+1. the order factor is causally identifiable;
 2. the paired comparison is sufficient to discriminate E1/E2;
-3. the prospective evidence criterion is adequately pre-specified;
-4. validity/exclusion rules are sufficiently closed before observation;
-5. A1/A2/EEC-003 dependencies are correctly incorporated;
-6. the design is ready for a separate execution-authorization decision.
+3. the fixed 24-pair allocation and block randomization are acceptable;
+4. the confidence procedure and verdict rule are adequately pre-specified;
+5. validity/exclusion rules are sufficiently closed before observation;
+6. A1/A2/EEC-003 dependencies are correctly incorporated;
+7. the design is ready for a separate execution-authorization decision.
 
 Only after an explicit governance disposition of this design may the project consider implementation or execution authorization.
 
-## 14. Canonical state
+## 17. Canonical state
 
 ```text
 FROZEN EVIDENCE                    CLOSED / IMMUTABLE
 H3-CAP-001                         ADMITTED
 EXECUTION DESIGN                   DRAFT / UNDER REVIEW
 ORDER FACTOR                       EXPLICIT / PROSPECTIVELY ASSIGNED
-E1/E2 DISCRIMINATION               PRE-SPECIFIED
+SCHEDULE                            FIXED: 24 PAIRS / 12 PER ORDER STRATUM
+RANDOMIZATION                      FIXED: PERMUTED BLOCKS OF FOUR
+ESTIMAND                            FIXED: tau_hat / delta_hat
+EVIDENCE RULE                      FIXED: 95% CI PRIMARY RULE
+VALIDITY RULES                     FIXED BEFORE OBSERVATION
+STOPPING RULE                      FIXED: 24 SCHEDULED PAIRS
 EXECUTION AUTHORIZATION            NOT GRANTED
 RUNNER IMPLEMENTATION              NOT AUTHORIZED
 WORKFLOW IMPLEMENTATION            NOT AUTHORIZED
