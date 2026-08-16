@@ -121,7 +121,6 @@ fn evaluate_active_correspondence(projection: &SemanticProjection) -> Result<(),
 }
 
 fn evaluate_birth(
-    before: &SemanticProjection,
     after: &SemanticProjection,
     child_pid: Pid,
     parent_pid: Pid,
@@ -141,16 +140,6 @@ fn evaluate_birth(
         .ok_or_else(|| format!("birth parent {parent_pid} has no active LifeGraph node"))?;
     if !parent.children.contains(&child_pid) {
         return Err(format!("parent {parent_pid} lacks child relation to {child_pid}"));
-    }
-
-    if child.birth_cycle != before.active_life_graph.nodes.iter()
-        .find(|node| node.pid == parent_pid)
-        .map(|node| node.birth_cycle)
-        .unwrap_or(child.birth_cycle)
-    {
-        // The Contract requires birth metadata to be represented; the harness only
-        // checks that the field is populated by the observed node record. It does not
-        // impose an additional cycle-equality rule.
     }
 
     if !after.ready_queue.contains(&child_pid) {
@@ -259,7 +248,6 @@ fn lg_p01_stable_active_correspondence() {
 fn lg_p02_accepted_birth_has_required_life_graph_semantics() {
     assert!(scenario_is_independent(ScenarioKind::Birth));
     let mut scheduler = scheduler();
-    let before = observe(&scheduler);
     let child_pid = 100;
 
     let result = scheduler.apply_evolution_plan(
@@ -278,7 +266,7 @@ fn lg_p02_accepted_birth_has_required_life_graph_semantics() {
     assert!(result.is_ok());
 
     let after = observe(&scheduler);
-    assert!(evaluate_birth(&before, &after, child_pid, 1).is_ok());
+    assert!(evaluate_birth(&after, child_pid, 1).is_ok());
 }
 
 #[test]
@@ -316,7 +304,6 @@ fn lg_n01_missing_active_lifegraph_node_is_rejected() {
 #[test]
 fn lg_n02_birth_missing_child_node_is_rejected() {
     let mut scheduler = scheduler();
-    let before = observe(&scheduler);
     let result = scheduler.apply_evolution_plan(
         EvolutionPlan {
             population_generation: 0,
@@ -333,13 +320,12 @@ fn lg_n02_birth_missing_child_node_is_rejected() {
     assert!(result.is_ok());
     scheduler.life_graph.nodes.remove(&100);
 
-    assert!(evaluate_birth(&before, &observe(&scheduler), 100, 1).is_err());
+    assert!(evaluate_birth(&observe(&scheduler), 100, 1).is_err());
 }
 
 #[test]
 fn lg_n03a_birth_missing_parent_child_relation_is_rejected() {
     let mut scheduler = scheduler();
-    let before = observe(&scheduler);
     let result = scheduler.apply_evolution_plan(
         EvolutionPlan {
             population_generation: 0,
@@ -356,45 +342,7 @@ fn lg_n03a_birth_missing_parent_child_relation_is_rejected() {
     assert!(result.is_ok());
     scheduler.life_graph.nodes.get_mut(&1).unwrap().children.clear();
 
-    assert!(evaluate_birth(&before, &observe(&scheduler), 100, 1).is_err());
-}
-
-#[test]
-fn lg_n03b_birth_missing_birth_metadata_is_rejected() {
-    let mut scheduler = scheduler();
-    let before = observe(&scheduler);
-    let result = scheduler.apply_evolution_plan(
-        EvolutionPlan {
-            population_generation: 0,
-            deaths: Vec::new(),
-            branches: vec![BranchRequest {
-                parent: pid(1),
-                mutation_rate: 0.1,
-            }],
-        },
-        &policy(),
-        &mut DefaultChildBuilder,
-        &mut SeededPidAllocator::new(100),
-    );
-    assert!(result.is_ok());
-    scheduler.life_graph.nodes.get_mut(&100).unwrap().birth_cycle = 0;
-    scheduler.generation = 1;
-
-    // The Oracle observes the metadata field; the test fixture makes the missing
-    // metadata explicit by removing the node's birth-cycle witness from the projection.
-    let mut projection = observe(&scheduler);
-    let child = projection
-        .active_life_graph
-        .nodes
-        .iter_mut()
-        .find(|node| node.pid == 100)
-        .unwrap();
-    child.birth_cycle = 0;
-    assert!(evaluate_birth(&before, &projection, 100, 1).is_ok());
-
-    // The production representation currently uses a scalar birth_cycle field,
-    // so there is no Option-valued absence state. This fixture therefore records
-    // the observation surface as present rather than inventing a stronger absence rule.
+    assert!(evaluate_birth(&observe(&scheduler), 100, 1).is_err());
 }
 
 #[test]
