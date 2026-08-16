@@ -62,3 +62,96 @@ jobs:
           name: cloud-conformance-evidence-${{ github.sha }}
           path: cloud-evidence/
           if-no-files-found: error
+
+  # Experimental execution only: canonical-context revalidation.
+  canonical-context-revalidation-experiment:
+    name: canonical context revalidation experiment
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout experiment branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pin exact candidate under test
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --detach 4a2f97c7703f17458c831721dfbba31f68f1cb1d
+          test "$(git rev-parse HEAD)" = "4a2f97c7703f17458c831721dfbba31f68f1cb1d"
+          test -z "$(git status --porcelain)"
+
+      - name: Initial canonical context is READY
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/canonical-context-revalidation-evidence"
+          mkdir -p "$evidence"
+          set +e
+          EXPECTED_COMMIT=4a2f97c7703f17458c831721dfbba31f68f1cb1d bash scripts/agent-environment-gate.sh > "$evidence/initial-gate.stdout" 2> "$evidence/initial-gate.stderr"
+          rc=$?
+          set -e
+          cat "$evidence/initial-gate.stdout"
+          cat "$evidence/initial-gate.stderr" >&2
+          printf 'initial_gate_exit=%s\n' "$rc" | tee "$evidence/initial-gate.result"
+          test "$rc" -eq 0
+          grep -Fq 'AGENT_ENVIRONMENT: READY' "$evidence/initial-gate.stdout"
+
+      - name: Drift canonical repository without dirtying workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/canonical-context-revalidation-evidence"
+          git remote set-url origin https://github.com/example/not-canonical.git
+          test -z "$(git status --porcelain)"
+          printf 'remote_after_drift=%s\n' "$(git remote get-url origin)" | tee "$evidence/drift.txt"
+          printf 'workspace_after_drift=' | tee -a "$evidence/drift.txt"
+          git status --porcelain | tee -a "$evidence/drift.txt"
+
+      - name: Re-enter mutation entrypoint after clean-workspace context drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/canonical-context-revalidation-evidence"
+          sentinel="$RUNNER_TEMP/canonical-context-revalidation-mutation-sentinel"
+          rm -f "$sentinel"
+          set +e
+          EXPECTED_COMMIT=4a2f97c7703f17458c831721dfbba31f68f1cb1d bash scripts/agent-mutation-entrypoint.sh 4a2f97c7703f17458c831721dfbba31f68f1cb1d -- touch "$sentinel" > "$evidence/reentry.stdout" 2> "$evidence/reentry.stderr"
+          rc=$?
+          set -e
+          cat "$evidence/reentry.stdout"
+          cat "$evidence/reentry.stderr" >&2
+          printf 'reentry_exit=%s\n' "$rc" | tee "$evidence/reentry.result"
+          if [[ -e "$sentinel" ]]; then
+            echo 'mutation_sentinel=present' | tee -a "$evidence/reentry.result"
+          else
+            echo 'mutation_sentinel=absent' | tee -a "$evidence/reentry.result"
+          fi
+          test "$rc" -ne 0
+          test ! -e "$sentinel"
+          grep -Fq 'AGENT_ENVIRONMENT: NOT_READY' "$evidence/reentry.stdout"
+          grep -Fq 'reason=canonical-repository-mismatch' "$evidence/reentry.stderr"
+
+      - name: Record raw experiment summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/canonical-context-revalidation-evidence"
+          {
+            echo "candidate=4a2f97c7703f17458c831721dfbba31f68f1cb1d"
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "workflow=$GITHUB_WORKFLOW"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "final_head=$(git rev-parse HEAD)"
+            echo "final_remote=$(git remote get-url origin)"
+            echo "final_workspace_status=$(git status --porcelain)"
+          } | tee "$evidence/summary.txt"
+
+      - name: Upload raw experiment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-context-revalidation-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/canonical-context-revalidation-evidence/
+          if-no-files-found: error
