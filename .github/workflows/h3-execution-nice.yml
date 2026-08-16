@@ -17,7 +17,7 @@ jobs:
 
       - name: Verify registered fallback arm
         env:
-          REGISTRATION_SHA: 0ff1fc6d6016fa30378061d8f65744ad4902ca16
+          REGISTRATION_SHA: 582b737319b02993ec3909c55b7eea144c44bccb
         run: |
           set -euo pipefail
           git fetch origin "$REGISTRATION_SHA" --depth=1
@@ -124,7 +124,7 @@ jobs:
               f.write(f'reason={reason}\n')
               f.write(f'median_ratio_e0={m0}\n')
               f.write(f'median_ratio_e255={m255}\n')
-              f.write('registration_sha=0ff1fc6d6016fa30378061d8f65744ad4902ca16\n')
+              f.write('registration_sha=582b737319b02993ec3909c55b7eea144c44bccb\n')
           PY
 
       - name: Upload H3 nice execution evidence
