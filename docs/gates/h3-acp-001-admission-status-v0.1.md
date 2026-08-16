@@ -16,6 +16,8 @@ This record fixes the governance state discovered during provenance reconciliati
 - `b4ed3a0734a0f423eacdaad528bf731eb523cd35` is an H3 identity-hash workflow correction, not an H3-ACP-001 admission event.
 - H3 PR history reviewed did not provide a canonical H3-ACP-001 admission event.
 - `docs/gates` contains explicit approval records for other governance artifacts, but no H3-ACP-001 approval record was found.
+- The A2 environment capability boundary is now present on `main` at `docs/execution/h3-a2-environment-capability-boundary-v0.1.md`, committed as `80f539fc96adf7bc59141645a2c0fd0134b934f6`.
+- That canonical `main` evidence record preserves the original source provenance: `e950a7493aeb49b51536f6afa181d5a1ac229d7a` on branch `agent/h3-a2-runner`; the source commit was not merged or reclassified retroactively.
 
 ## Governance rule applied
 
@@ -34,6 +36,12 @@ Until a canonical admission event is explicitly recorded:
 - The previously recorded A2 environment capability boundary remains unchanged.
 - No historical commit is retroactively reclassified as an admission event.
 
+## Approval-pattern interpretation
+
+The repository's existing governance pattern separates an artifact from its approval record and separates review approval from artifact authorization. Existing approval records identify the exact approved artifact revision, normative dependencies, approval basis, authorization scope, and boundary. H3-ACP-001 has not yet received such a canonical admission/authorization record.
+
+Therefore the present record is a **governance status decision**, not an H3 admission authorization. Its `NOT ADMITTED` state does not grant any execution authority and does not require a new authority layer or a new reviewer identity model.
+
 ## Required transition
 
 A future admission, if governance approves H3-ACP-001, MUST create an explicit canonical approval/admission record that identifies:
@@ -42,7 +50,7 @@ A future admission, if governance approves H3-ACP-001, MUST create an explicit c
 2. the exact approved artifact revision;
 3. the frozen baseline used for the decision;
 4. the applicable A1/A2/EEC-003 dependencies;
-5. the decision authority and decision timestamp;
+5. the governing decision authority and decision timestamp;
 6. the resulting admitted execution policy revision.
 
 Only that explicit event may transition H3-ACP-001 from `NOT ADMITTED` to `ADMITTED`.
@@ -56,5 +64,6 @@ Governance status                      NOT ADMITTED
 A2 registration                        UNCHANGED
 A2 runner                              UNCHANGED
 Threshold                              UNCHANGED
+H3 A2 capability boundary              CANONICALLY RECORDED ON MAIN
 H3 causal execution                    NOT AUTHORIZED
 ```
