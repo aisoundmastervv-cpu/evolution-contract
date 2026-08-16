@@ -30,6 +30,19 @@ reason=environment-identity-mismatch
 mutation sentinel = ABSENT
 ```
 
+## Environment identity
+
+The experiment uses the identity inputs already defined by Environment Contract v0.1:
+
+- canonical repository URL;
+- exact commit SHA;
+- Environment Contract content hash;
+- bootstrap implementation content hash;
+- `rustc --version`;
+- `cargo --version`.
+
+The controlled drift changes only the observed `rustc` identity through an executable wrapper outside the repository workspace. No repository file is modified by the drift operation.
+
 ## Evidence boundary
 
 A PASS applies only to the tested invariant:
