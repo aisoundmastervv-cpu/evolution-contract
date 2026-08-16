@@ -38,6 +38,14 @@ jobs:
       - name: Check cloud implementation formatting
         run: rustfmt --edition 2021 --check src/cloud_execution.rs
 
+      - name: Build production runtime candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --bin cloud_runtime
+          sha256sum target/release/cloud_runtime | tee cloud-evidence/cloud-runtime-sha256.txt
+          cp target/release/cloud_runtime cloud-evidence/cloud_runtime
+
       - name: Run cloud substrate conformance tests
         shell: bash
         run: |
