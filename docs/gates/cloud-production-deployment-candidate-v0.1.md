@@ -1,6 +1,6 @@
 # Cloud Production Deployment Candidate v0.1
 
-**Status:** IDENTIFICATION PENDING  
+**Status:** PARTIALLY IDENTIFIED / PROVIDER AND ENVIRONMENT PENDING  
 **Decision:** PENDING  
 **Production deployment authorization:** NOT GRANTED
 
@@ -10,11 +10,7 @@ This record defines the concrete deployment candidate that may later be evaluate
 
 This record does **not** authorize deployment, establish production readiness, or imply that a production environment exists.
 
-The candidate is an object of governance: it identifies exactly what would be authorized if and only if a later authorization decision explicitly approves it.
-
 ## 2. Normative distinction
-
-The following distinctions are mandatory:
 
 ```text
 Deployment Candidate
@@ -26,11 +22,9 @@ Production Authorization
 Production Deployment
 ```
 
-A candidate may be identified without being approved, authorized, or deployed.
+A candidate may be partially identified without being approved, authorized, or deployed.
 
 ## 3. Governing approvals
-
-The candidate is governed by the following already-approved artifacts:
 
 | Artifact | Reference | Status |
 |---|---|---|
@@ -38,108 +32,113 @@ The candidate is governed by the following already-approved artifacts:
 | Cloud Conformance Review v0.1 revision-001 | `docs/gates/cloud-execution-conformance-review-v0.1-revision-001.md` | APPROVED |
 | Cloud Conformance Approval Record v0.1 | `docs/gates/cloud-conformance-approval-record-v0.1.md` | APPROVED |
 | Cloud Production Authorization Gate v0.1 | `docs/gates/cloud-production-authorization-gate-v0.1.md` | DEFINED / NOT EXECUTED |
+| Cloud Production Packaging v0.1 | `docs/gates/cloud-production-packaging-v0.1.md` | EVIDENCE COLLECTED / PROVIDER PENDING |
 
 These governing artifacts are inputs to the candidate. This record MUST NOT amend them implicitly.
 
 ## 4. Candidate identity
 
-The following fields are mandatory for a production authorization decision. They are intentionally unresolved until a concrete deployment candidate is created and verified.
-
 | Field | Current value |
 |---|---|
 | Source repository | `aisoundmastervv-cpu/evolution-contract` |
-| Source revision | **PENDING** |
-| Build artifact identity | **PENDING** |
-| Build artifact SHA-256 | **PENDING** |
+| Source revision | `e9a2fcb8b2b5c35ace09828e5e865af5e1d48de3` |
+| Production entrypoint | `src/bin/cloud_runtime.rs` |
+| Build command | `cargo build --release --bin cloud_runtime` |
+| Build artifact | `cloud_runtime` |
+| Build artifact SHA-256 | `be5923f34e905bb8c09ad12fa89545f3c9c5a9ddffe817f53db25b9337accc71` |
+| Packaging evidence workflow run | `31922170829` |
+| Packaging evidence artifact | `cloud-conformance-v0-1-evidence-e9a2fcb8b2b5c35ace09828e5e865af5e1d48de3` |
+| Packaging evidence artifact ID | `9256683274` |
+| Packaging evidence artifact SHA-256 | `d9d07b1c9866bd90813dc5975aba747721ddf192af7efdc637818ed92b7d7201` |
 | Deployment configuration identity | **PENDING** |
 | Deployment configuration digest | **PENDING** |
 | Provider | **PENDING** |
 | Target environment | **PENDING** |
 | Target environment identity | **PENDING** |
-| Governing specification revisions | **FIXED / SEE SECTION 3** |
 | Candidate identity | **PENDING** |
+| Governing specification revisions | **FIXED / SEE SECTION 3** |
 
-No value may be inferred from a generic branch, workflow runner, local/reference provider, or conformance artifact.
+The immutable source revision, executable artifact, artifact digest, and packaging evidence are now concretely identified. Provider, environment, and production configuration remain unresolved.
 
-## 5. Current implementation boundary
+## 5. Production execution unit
 
-The current cloud implementation is a provider-neutral reference/conformance substrate. The implementation plan explicitly states that it does not select AWS, GCP, Azure, Kubernetes, Terraform, or another production deployment platform, and that the reference provider is not itself a production deployment. fileciteturn22file0
-
-Accordingly, the following are **not** treated as a production deployment candidate by this record:
-
-- GitHub Actions runner environments;
-- conformance test binaries;
-- conformance evidence artifacts;
-- reference/local provider instances;
-- source repository state without an immutable build artifact;
-- a branch name without an immutable revision;
-- an unspecified cloud account, cluster, host, or region.
-
-## 6. Required candidate identity binding
-
-Before the candidate can enter Production Readiness Review, its identity MUST bind at least:
-
-1. exact source commit or other immutable source revision;
-2. immutable build artifact identity;
-3. build artifact digest;
-4. exact deployment configuration identity and digest where applicable;
-5. provider identity;
-6. target production environment identity;
-7. applicable governing specification revisions;
-8. candidate record identity.
-
-A candidate that cannot be reconstructed or unambiguously distinguished from another deployment MUST NOT be considered sufficiently identified.
-
-## 7. Artifact integrity
-
-The production candidate MUST use an immutable artifact whose integrity can be independently verified.
-
-The following values remain unresolved until the candidate is actually built:
+The candidate execution unit is the executable produced by:
 
 ```text
-Source revision:          PENDING
-Artifact identity:        PENDING
-Artifact SHA-256:         PENDING
-Configuration identity:   PENDING
-Configuration digest:     PENDING
+cargo build --release --bin cloud_runtime
 ```
 
-Conformance evidence does not substitute for production artifact identity.
+The entrypoint is:
 
-## 8. Environment identity
+```text
+src/bin/cloud_runtime.rs
+```
 
-A production candidate MUST identify its intended target environment explicitly.
+The runtime is bound to the approved validation executor through the cloud execution adapter and uses the durable `FileExecutionStore` journal path supplied at runtime.
 
-At minimum, the eventual environment record MUST establish:
+## 6. Runtime evidence
+
+The exact artifact produced from source revision `e9a2fcb8b2b5c35ace09828e5e865af5e1d48de3` was executed in GitHub Actions run `31922170829`.
+
+The production runtime smoke test completed successfully twice against the same journal:
+
+```text
+execution=packaging-smoke attempt=1 outcome=completed
+execution=packaging-smoke attempt=2 outcome=completed
+```
+
+The journal recorded two linked attempts with chained audit heads. This establishes that the built artifact is not merely compilable: the executable entrypoint can invoke the approved executor adapter and persist an operational execution record.
+
+## 7. Configuration boundary
+
+The following runtime parameters were exercised by the packaging smoke test:
+
+```text
+--execution-id packaging-smoke
+--transition observation-unavailable
+--journal cloud-evidence/runtime-smoke.journal
+```
+
+These values establish the current smoke-test invocation contract, but they do not yet constitute a production deployment configuration.
+
+A production configuration identity and digest remain:
+
+```text
+Deployment configuration identity: PENDING
+Deployment configuration digest:   PENDING
+```
+
+## 8. Provider and environment boundary
+
+No production provider or target environment has been selected by this record.
+
+The following remain unresolved:
 
 ```text
 Provider:                 PENDING
-Environment name:         PENDING
-Environment identity:     PENDING
+Target environment:       PENDING
+Environment identity:    PENDING
 Region / location:        PENDING
 Account / project scope:  PENDING
 ```
 
-No production environment is implied by this record.
+GitHub Actions remains an evidence execution environment, not a production target.
 
-The GitHub Actions execution environment used for conformance evidence is an execution environment for validation, not a production target. The conformance workflow executes on `ubuntu-latest` and records execution provenance separately. fileciteturn21file0
+## 9. Artifact integrity
 
-## 9. Configuration boundary
+The production artifact is identified by the SHA-256 digest:
 
-Production configuration MUST be treated as a first-class candidate component.
+```text
+be5923f34e905bb8c09ad12fa89545f3c9c5a9ddffe817f53db25b9337accc71
+```
 
-Configuration affecting any of the following MUST be explicitly identified and integrity-bound:
+The surrounding packaging evidence artifact is independently identified by:
 
-- executor invocation;
-- provider selection;
-- persistence;
-- recovery;
-- authorization;
-- operational failure handling;
-- observability;
-- deployment topology.
+```text
+d9d07b1c9866bd90813dc5975aba747721ddf192af7efdc637818ed92b7d7201
+```
 
-No configuration value may silently acquire semantic authority.
+These two digests MUST NOT be conflated: the first identifies the executable; the second identifies the evidence archive.
 
 ## 10. Semantic boundary
 
@@ -157,12 +156,19 @@ It MUST NOT define or modify:
 
 Infrastructure and provider configuration remain operational unless a separately approved semantic mapping exists.
 
-## 11. Candidate lifecycle
+## 11. Readiness review prerequisite
 
-The candidate progresses through the following states:
+The candidate is **not yet eligible for final Production Readiness Review** because provider, target environment, and production configuration identity remain unresolved.
+
+The next required work is to bind these remaining operational identities without changing the approved semantic layer.
+
+## 12. Candidate lifecycle
 
 ```text
 IDENTIFICATION PENDING
+        │
+        ▼
+PARTIALLY IDENTIFIED        ← CURRENT STATE
         │
         ▼
 IDENTIFIED
@@ -185,65 +191,37 @@ AUTHORIZED
 DEPLOYED
 ```
 
-This record currently remains at:
+## 13. Current disposition
 
 ```text
-IDENTIFICATION PENDING
+Source revision             IDENTIFIED
+Production entrypoint       IDENTIFIED
+Immutable artifact          IDENTIFIED
+Artifact SHA-256            IDENTIFIED
+Runtime smoke evidence      PASSED
+Packaging evidence          COLLECTED
+Configuration identity      PENDING
+Provider                    PENDING
+Target environment          PENDING
+Production readiness        NOT REVIEWED
+Production authorization    NOT GRANTED
+Production deployment       NOT AUTHORIZED
 ```
 
-No transition beyond this state is implied.
+## 14. Governance invariant
 
-## 12. Readiness review prerequisite
+> A deployment candidate becomes fully identified only when its immutable artifact, production configuration, provider, and target environment are explicitly bound and independently verifiable.
 
-The next required governance artifact is the **Cloud Production Readiness Review**.
+And:
 
-That review MUST evaluate the candidate after all mandatory identity fields have been resolved.
-
-A readiness review MUST NOT manufacture missing candidate identity from assumptions, defaults, or unrelated conformance evidence.
-
-## 13. Authorization boundary
-
-Even after the candidate becomes fully identified and passes readiness review, production deployment remains unauthorized until a separate **Cloud Production Authorization Record** explicitly authorizes this exact candidate.
-
-Therefore:
-
-```text
-identified
-    ≠
-ready
-    ≠
-authorized
-    ≠
-deployed
-```
-
-## 14. Current disposition
-
-```text
-Deployment Candidate           IDENTIFICATION PENDING
-Source revision                PENDING
-Build artifact                 PENDING
-Artifact digest                PENDING
-Configuration                  PENDING
-Provider                       PENDING
-Target environment             PENDING
-Production readiness           NOT REVIEWED
-Production authorization       NOT GRANTED
-Production deployment          NOT AUTHORIZED
-```
-
-## 15. Governance invariant
-
-> A deployment candidate is a uniquely identified object proposed for governance review; it acquires no production authority merely by being identified.
-
-And more strictly:
-
-> No production deployment may be authorized unless the authorization decision is explicitly bound to the exact deployment candidate and its immutable artifact, configuration, and target environment identity.
+> Successful production packaging evidence does not authorize deployment and does not substitute for provider, environment, configuration, readiness, or authorization decisions.
 
 ---
 
 **Record:** Cloud Production Deployment Candidate v0.1  
-**Status:** IDENTIFICATION PENDING  
+**Status:** PARTIALLY IDENTIFIED / PROVIDER AND ENVIRONMENT PENDING  
 **Decision:** PENDING  
 **Production authorization:** NOT GRANTED  
+**Packaging evidence run:** `31922170829`  
+**Artifact SHA-256:** `be5923f34e905bb8c09ad12fa89545f3c9c5a9ddffe817f53db25b9337accc71`  
 **Decision date:** 2026-08-16
