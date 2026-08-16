@@ -8,7 +8,8 @@ mod substrate;
 
 pub use substrate::{
     ArtifactId, ExecutionAttempt, ExecutionContext, ExecutionIdentity, ExecutionOutcome,
-    ExecutionStore, InMemoryExecutionStore, OperationalFailure, ReferenceExecutorInvoker,
+    ExecutionStore, ExecutorIdentity, FileExecutionStore, InMemoryExecutionStore,
+    OperationalFailure, ReferenceExecutorInvoker,
 };
 
 pub fn execute_approved_once<I: ReferenceExecutorInvoker, S: ExecutionStore>(
@@ -90,7 +91,7 @@ mod tests {
             ]
             .into_iter()
             .collect(),
-            executor: substrate::ExecutorIdentity {
+            executor: ExecutorIdentity {
                 version: ArtifactId(version.into()),
             },
             scope: ArtifactId("scope@g11".into()),
