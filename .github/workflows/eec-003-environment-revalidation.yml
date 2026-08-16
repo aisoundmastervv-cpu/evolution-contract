@@ -11,7 +11,7 @@ permissions:
 jobs:
   eec-003-environment-revalidation:
     name: EEC-003 environment revalidation
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'cloud/eec-003-environment-revalidation'
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'cloud/eec-003-execution-candidate'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout exact candidate commit
