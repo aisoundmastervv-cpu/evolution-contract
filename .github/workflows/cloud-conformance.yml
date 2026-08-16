@@ -124,13 +124,13 @@ jobs:
           mkdir -p "$drift_dir"
           real_rustc="$(command -v rustc)"
           cat > "$drift_dir/rustc" <<EOF
-#!/usr/bin/env bash
-if [[ "\${1:-}" == "--version" ]]; then
-  echo 'rustc 999.0.0 (controlled-environment-drift)'
-  exit 0
-fi
-exec "$real_rustc" "\$@"
-EOF
+          #!/usr/bin/env bash
+          if [[ "\${1:-}" == "--version" ]]; then
+            echo 'rustc 999.0.0 (controlled-environment-drift)'
+            exit 0
+          fi
+          exec "$real_rustc" "\$@"
+          EOF
           chmod +x "$drift_dir/rustc"
           export PATH="$drift_dir:$PATH"
           echo "drifted_rustc=$(rustc --version)" | tee -a "$evidence"
