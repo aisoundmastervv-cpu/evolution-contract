@@ -1,0 +1,10 @@
+{
+  "schema": "g-experimental-state/v1",
+  "last_verified_facts": [
+    {"gate":"G12c","status":"VERIFIED","property":"tamper_detection_rejects_modified_evidence","observed_outcome":"DENY","earned_capability":"NONE"},
+    {"gate":"G12c-P","status":"FAILED","property":"immutable_evidence_preservation","observed_outcome":"DENY","reason":"preserved G12c evidence was not available to the preservation verifier","earned_capability":"NONE"}
+  ],
+  "current_capability":"NONE",
+  "next_gate":"G12c-P-R",
+  "authorization_rule":"No gate may authorize from another gate's assertion; later gates may use only independently verifiable evidence."
+}
