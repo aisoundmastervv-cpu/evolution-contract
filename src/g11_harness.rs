@@ -3,6 +3,8 @@
 
 use super::*;
 
+mod lifegraph_harness;
+
 fn pid(pid: Pid) -> EvolvablePid {
     EvolvablePid::from_filtered(pid, ProtectionLevel::Evolvable).unwrap()
 }
