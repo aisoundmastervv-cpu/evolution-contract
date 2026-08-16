@@ -21,10 +21,10 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin "$REGISTRATION_SHA" --depth=1
-          git show "$REGISTRATION_SHA:H3_EXECUTION_ARM_NICE.md" > /tmp/registered-arm.md
-          cmp -s /tmp/registered-arm.md H3_EXECUTION_ARM_NICE.md
-          grep -F 'Mapping ID: A1-nice-v1' /tmp/registered-arm.md
-          grep -F 'nice(e) = 19 - floor(19 * e / 255)' /tmp/registered-arm.md
+          git show "$REGISTRATION_SHA:H3_EXECUTION_ARM_NICE.md" | grep -F 'Mapping ID: A1-nice-v1'
+          git show "$REGISTRATION_SHA:H3_EXECUTION_ARM_NICE.md" | grep -F 'nice(e) = 19 - floor(19 * e / 255)'
+          grep -F 'Mapping ID: A1-nice-v1' H3_EXECUTION_ARM_NICE.md
+          grep -F 'nice(e) = 19 - floor(19 * e / 255)' H3_EXECUTION_ARM_NICE.md
           echo "registration_sha=$REGISTRATION_SHA" | tee execution-registration.txt
 
       - name: Run registered nice execution arm
