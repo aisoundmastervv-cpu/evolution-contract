@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ArtifactId(pub String);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ExecutionIdentity(pub String);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
