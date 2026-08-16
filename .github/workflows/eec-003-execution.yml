@@ -1,6 +1,8 @@
 name: EEC-003 Execution
 
 on:
+  push:
+    branches: [main]
   pull_request_target:
     types: [opened, reopened, synchronize]
     branches: [main]
@@ -13,10 +15,13 @@ on:
 permissions:
   contents: read
 
+env:
+  EEC003_CANDIDATE_COMMIT: e0328b4ddca7a6bd0ba178eb501ff74a2738e001
+
 jobs:
   eec-003-environment-revalidation:
     name: EEC-003 environment revalidation
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request_target' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request_target' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Resolve candidate commit
@@ -26,7 +31,7 @@ jobs:
           MANUAL_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          candidate="${PR_HEAD_SHA:-${WORKFLOW_RUN_SHA:-$MANUAL_SHA}}"
+          candidate="${PR_HEAD_SHA:-${WORKFLOW_RUN_SHA:-${EEC003_CANDIDATE_COMMIT:-$MANUAL_SHA}}}"
           test -n "$candidate"
           printf 'EXPECTED_COMMIT=%s\n' "$candidate" >> "$GITHUB_ENV"
           printf 'candidate_commit=%s\n' "$candidate"
@@ -34,7 +39,7 @@ jobs:
       - name: Checkout exact candidate commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || env.EEC003_CANDIDATE_COMMIT }}
           fetch-depth: 0
 
       - name: Establish initial conformant environment
@@ -135,6 +140,6 @@ EOF
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: eec-003-environment-revalidation-evidence-${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}
+          name: eec-003-environment-revalidation-evidence-${{ env.EEC003_CANDIDATE_COMMIT }}
           path: ${{ runner.temp }}/eec-003-evidence.txt
           if-no-files-found: error
