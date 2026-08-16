@@ -1,0 +1,126 @@
+name: EEC-003 Environment Revalidation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  eec-003-environment-revalidation:
+    name: EEC-003 environment revalidation
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'cloud/eec-003-environment-revalidation'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact candidate commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Establish initial conformant environment
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/eec-003-evidence.txt"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_COMMIT"
+          remote="$(git remote get-url origin)"
+          contract_sha="$(sha256sum docs/execution/environment-contract-v0.1.md | awk '{print $1}')"
+          bootstrap_sha="$(sha256sum scripts/bootstrap-environment.sh | awk '{print $1}')"
+          rustc_version="$(rustc --version)"
+          cargo_version="$(cargo --version)"
+          identity_input=$(printf '%s\n' \
+            "repository=$remote" \
+            "commit=$actual" \
+            "environment_contract_sha256=$contract_sha" \
+            "bootstrap_sha256=$bootstrap_sha" \
+            "rustc=$rustc_version" \
+            "cargo=$cargo_version")
+          environment_id="$(printf '%s' "$identity_input" | sha256sum | awk '{print $1}')"
+          {
+            printf 'expected_commit=%s\n' "$EXPECTED_COMMIT"
+            printf 'initial_remote=%s\n' "$remote"
+            printf 'initial_head=%s\n' "$actual"
+            printf 'initial_workspace_status='; git status --porcelain
+            printf 'initial_environment_id=%s\n' "$environment_id"
+            printf 'initial_rustc=%s\n' "$rustc_version"
+            printf 'initial_cargo=%s\n' "$cargo_version"
+          } | tee "$evidence"
+          EXPECTED_COMMIT="$EXPECTED_COMMIT" EXPECTED_ENVIRONMENT_ID="$environment_id" bash scripts/agent-environment-gate.sh | tee -a "$evidence"
+          echo 'EEC-003: initial READY established' | tee -a "$evidence"
+          printf 'EXPECTED_ENVIRONMENT_ID=%s\n' "$environment_id" >> "$GITHUB_ENV"
+
+      - name: Record baseline repository state
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/eec-003-evidence.txt"
+          {
+            printf 'baseline_remote=%s\n' "$(git remote get-url origin)"
+            printf 'baseline_head=%s\n' "$(git rev-parse HEAD)"
+            printf 'baseline_workspace_status='; git status --porcelain
+          } | tee -a "$evidence"
+
+      - name: Controlled environment drift outside workspace
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/eec-003-evidence.txt"
+          drift_dir="$RUNNER_TEMP/eec-003-drift-bin"
+          mkdir -p "$drift_dir"
+          real_rustc="$(command -v rustc)"
+          cat > "$drift_dir/rustc" <<EOF
+#!/usr/bin/env bash
+if [[ "\${1:-}" == "--version" ]]; then
+  echo 'rustc 999.0.0 (controlled-environment-drift)'
+  exit 0
+fi
+exec "$real_rustc" "\$@"
+EOF
+          chmod +x "$drift_dir/rustc"
+          export PATH="$drift_dir:$PATH"
+          echo "drifted_rustc=$(rustc --version)" | tee -a "$evidence"
+          printf 'drift_remote=%s\n' "$(git remote get-url origin)" | tee -a "$evidence"
+          printf 'drift_head=%s\n' "$(git rev-parse HEAD)" | tee -a "$evidence"
+          printf 'drift_workspace_status='; git status --porcelain | tee -a "$evidence"
+
+      - name: Re-enter mutation boundary and require fail-closed behavior
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/eec-003-evidence.txt"
+          sentinel="$RUNNER_TEMP/eec-003-mutation-sentinel"
+          stderr="$RUNNER_TEMP/eec-003-reentry-stderr.txt"
+          rm -f "$sentinel" "$stderr"
+          if EXPECTED_ENVIRONMENT_ID="$EXPECTED_ENVIRONMENT_ID" bash scripts/agent-mutation-entrypoint.sh "$EXPECTED_COMMIT" -- touch "$sentinel" 2>"$stderr"; then
+            echo 'EEC-003: FAIL — mutation entrypoint accepted drifted environment' >&2
+            cat "$stderr" >&2
+            exit 1
+          fi
+          cat "$stderr" | tee -a "$evidence"
+          test ! -e "$sentinel"
+          grep -Fq 'AGENT_ENVIRONMENT: NOT_READY' "$stderr"
+          grep -Fq 'reason=environment-identity-mismatch' "$stderr"
+          echo 'EEC-003: PASS — environment drift revoked mutation authorization' | tee -a "$evidence"
+
+      - name: Record final invariant state
+        if: always()
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/eec-003-evidence.txt"
+          {
+            printf 'final_remote=%s\n' "$(git remote get-url origin)"
+            printf 'final_head=%s\n' "$(git rev-parse HEAD)"
+            printf 'final_workspace_status='; git status --porcelain
+            printf 'mutation_sentinel='; test -e "$RUNNER_TEMP/eec-003-mutation-sentinel" && echo present || echo absent
+          } | tee -a "$evidence"
+
+      - name: Upload EEC-003 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eec-003-environment-revalidation-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/eec-003-evidence.txt
+          if-no-files-found: error
