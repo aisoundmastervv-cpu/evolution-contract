@@ -12,7 +12,7 @@ For any concrete request:
 AUTHORIZED(actor, object_revision, scope, t)
 ```
 
-the result is `TRUE` if and only if a complete, valid, canonical, non-revoked authority lineage exists satisfying every required condition.
+the result is `TRUE` if and only if a complete, valid, canonical, non-revoked authority lineage exists satisfying every required condition and terminating at a valid canonical authority root.
 
 If any required condition is absent or unverifiable:
 
@@ -39,7 +39,7 @@ valid_until
 parent lineage / authorized root
 ```
 
-Missing any one component yields:
+Missing or unverifiable any one component yields:
 
 ```text
 missing component
@@ -58,9 +58,11 @@ For every non-root authority event:
 actor_authority(actor, domain)
     requires
 valid_canonical_lineage(actor, domain)
+    terminating at
+valid_authority_root(domain)
 ```
 
-The authority root must be separately defined and governed. An authority event cannot bootstrap the authority of its own issuer.
+The authority root is separately defined and governed. An authority event cannot bootstrap the authority of its own issuer, and a self-attested root claim is invalid.
 
 ## 4. Explicit temporal validity
 
@@ -71,7 +73,7 @@ valid_from
 valid_until
 ```
 
-No higher-level-contract fallback may supply a missing `valid_until` in v0.1. No authority is perpetual by default.
+No higher-level-contract fallback, inherited default, or implicit convention may supply a missing validity boundary in v0.1. No authority is perpetual by default.
 
 ## 5. Counterexample closure test
 
@@ -89,7 +91,7 @@ AUTHORIZED = FALSE
 
 ### AUTH-ACTOR-001 — unverified actor authority
 
-Keep all event fields valid-looking but remove the independent authority lineage for the actor/domain.
+Keep all event fields valid-looking but remove the independent authority lineage for the actor/domain, or replace the root with a self-attested root claim.
 
 Expected:
 
@@ -99,7 +101,7 @@ AUTHORIZED = FALSE
 
 ### AUTH-TIME-001 — missing validity boundary
 
-Remove `valid_until`.
+Remove `valid_until` (or `valid_from`).
 
 Expected:
 
@@ -147,8 +149,18 @@ Expected:
 AUTHORIZED = FALSE
 ```
 
+### AUTH-ROOT-001 — forged or self-attested root
+
+Construct an otherwise complete lineage whose root authority is only asserted by the subject or is not independently anchored by the canonical governance root.
+
+Expected:
+
+```text
+AUTHORIZED = FALSE
+```
+
 ## 6. Admission condition
 
-`Authority Capability Model v0.1` MUST NOT be admitted until governance can show that no valid normative interpretation produces `AUTHORIZED = TRUE` when any required lineage condition is absent or unverifiable.
+`Authority Capability Model v0.1` MUST NOT be admitted until governance can show that no valid normative interpretation produces `AUTHORIZED = TRUE` when any required lineage condition is absent or unverifiable, including the authority-root condition.
 
 This closure criteria artifact is a review instrument only. It creates no authority and does not authorize `AuthorizedExecutionToken`, enforcement, implementation, or execution.
