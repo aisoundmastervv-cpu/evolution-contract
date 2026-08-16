@@ -133,6 +133,7 @@ jobs:
           EOF
           chmod +x "$drift_dir/rustc"
           export PATH="$drift_dir:$PATH"
+          echo "$drift_dir" >> "$GITHUB_PATH"
           echo "drifted_rustc=$(rustc --version)" | tee -a "$evidence"
           printf 'drift_remote=%s\n' "$(git remote get-url origin)" | tee -a "$evidence"
           printf 'drift_head=%s\n' "$(git rev-parse HEAD)" | tee -a "$evidence"
