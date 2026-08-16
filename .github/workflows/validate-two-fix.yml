@@ -42,25 +42,18 @@ jobs:
       - name: cargo check
         run: cargo check --all-targets
 
-      - name: cargo test (capture full result)
-        id: test
-        continue-on-error: true
-        run: |
-          set +e
-          cargo test --all-targets -- --nocapture 2>&1 | tee VALIDATION_TEST_OUTPUT.txt
-          status=${PIPESTATUS[0]}
-          echo "TEST_EXIT_CODE=$status" >> VALIDATION_TEST_OUTPUT.txt
-          exit $status
+      - name: cargo test
+        run: cargo test --all-targets -- --nocapture
 
       - name: cargo clippy
-        id: clippy
-        continue-on-error: true
         run: cargo clippy --all-targets -- -D warnings
 
-      - name: Commit validation evidence
+      - name: Commit only the validated source fix and clean temporary validation files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add VALIDATION_TEST_OUTPUT.txt
-          git commit -m "Record two-fix validation test result [validation-evidence]"
+          rm -f VALIDATION_TRIGGER.txt VALIDATION_TEST_OUTPUT.txt .github/workflows/validate-two-fix.yml
+          git add src/lib.rs
+          git add -u
+          git commit -m "Fix two confirmed compiler errors [validation-patched]"
           git push
