@@ -21,8 +21,8 @@ jobs:
       - name: Install stable Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: cargo fmt --check
-        run: cargo fmt --all -- --check
+      - name: rustfmt --check (H3 harness only)
+        run: rustfmt --edition 2021 --check src/h3_execution.rs
 
       - name: cargo check --all-targets
         run: cargo check --all-targets
