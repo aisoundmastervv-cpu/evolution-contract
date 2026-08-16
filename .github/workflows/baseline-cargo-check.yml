@@ -1,0 +1,28 @@
+name: Baseline Cargo Check (diagnostic)
+
+on:
+  push:
+    branches: ['diagnostic/baseline-cargo-check']
+
+jobs:
+  baseline-cargo-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact baseline
+        env:
+          BASELINE_SHA: ffb45c06fd835f9b8cc765d91797090b9bfccc34
+        run: |
+          git cat-file -e "${BASELINE_SHA}^{commit}"
+          git checkout --detach "$BASELINE_SHA"
+          test "$(git rev-parse HEAD)" = "$BASELINE_SHA"
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Baseline cargo check
+        run: cargo check --all-targets
