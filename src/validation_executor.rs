@@ -125,25 +125,40 @@ fn authorized_next_state(
     state: MachineState,
     transition: Transition,
 ) -> Option<MachineState> {
-    use MachineState::*;
-    use Transition::*;
-
     match (state, transition) {
-        (FrozenInput, PlanAuthorize) => Some(PlanAuthorized),
-        (PlanAuthorized, RequireObservation) => Some(ObservationRequired),
-        (PlanAuthorized, Verdict(Verdict::Untested)) => Some(Verdict),
-        (ObservationRequired, ObservationExecute) => Some(ObservationExecuted),
-        (ObservationRequired, ObservationUnavailable) => Some(ObservationUnavailable),
-        (ObservationExecuted, CollectEvidence) => Some(EvidenceCollected),
-        (EvidenceCollected, EvaluateOracle) => Some(OracleEvaluated),
-        (EvidenceCollected, MarkUnderdetermined) => Some(Underdetermined),
-        (OracleEvaluated, Verdict(_)) => Some(Verdict),
-        (OracleEvaluated, MarkUnderdetermined) => Some(Underdetermined),
-        (ObservationUnavailable, ClassifyObservationGap) => Some(ObservationGap),
-        (ObservationGap, Stop) => Some(Stop),
-        (Underdetermined, Stop) => Some(Stop),
-        (NotAuthorized, Stop) => Some(Stop),
-        (Verdict, Stop) => Some(Stop),
+        (MachineState::FrozenInput, Transition::PlanAuthorize) => Some(MachineState::PlanAuthorized),
+        (MachineState::PlanAuthorized, Transition::RequireObservation) => {
+            Some(MachineState::ObservationRequired)
+        }
+        (MachineState::PlanAuthorized, Transition::Verdict(Verdict::Untested)) => {
+            Some(MachineState::Verdict)
+        }
+        (MachineState::ObservationRequired, Transition::ObservationExecute) => {
+            Some(MachineState::ObservationExecuted)
+        }
+        (MachineState::ObservationRequired, Transition::ObservationUnavailable) => {
+            Some(MachineState::ObservationUnavailable)
+        }
+        (MachineState::ObservationExecuted, Transition::CollectEvidence) => {
+            Some(MachineState::EvidenceCollected)
+        }
+        (MachineState::EvidenceCollected, Transition::EvaluateOracle) => {
+            Some(MachineState::OracleEvaluated)
+        }
+        (MachineState::EvidenceCollected, Transition::MarkUnderdetermined) => {
+            Some(MachineState::Underdetermined)
+        }
+        (MachineState::OracleEvaluated, Transition::Verdict(_)) => Some(MachineState::Verdict),
+        (MachineState::OracleEvaluated, Transition::MarkUnderdetermined) => {
+            Some(MachineState::Underdetermined)
+        }
+        (MachineState::ObservationUnavailable, Transition::ClassifyObservationGap) => {
+            Some(MachineState::ObservationGap)
+        }
+        (MachineState::ObservationGap, Transition::Stop) => Some(MachineState::Stop),
+        (MachineState::Underdetermined, Transition::Stop) => Some(MachineState::Stop),
+        (MachineState::NotAuthorized, Transition::Stop) => Some(MachineState::Stop),
+        (MachineState::Verdict, Transition::Stop) => Some(MachineState::Stop),
         _ => None,
     }
 }
