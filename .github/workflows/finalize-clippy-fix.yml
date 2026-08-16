@@ -1,0 +1,48 @@
+name: Finalize clippy fix
+
+on:
+  push:
+    branches: [validation/real-two-fix]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Apply the test-only dead-code fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("src/lib.rs")
+          s = p.read_text()
+          old = "impl EvolvablePid {\n    pub(crate) fn from_filtered"
+          new = "impl EvolvablePid {\n    #[cfg(test)]\n    pub(crate) fn from_filtered"
+          if s.count(old) != 1:
+              raise SystemExit(f"expected exactly one target, found {s.count(old)}")
+          p.write_text(s.replace(old, new))
+          PY
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+      - name: cargo check
+        run: cargo check --all-targets
+      - name: cargo test
+        run: cargo test --all-targets -- --nocapture
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Commit final source and clean temporary validation harness
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f CLIPPY_DIAGNOSTIC.txt .github/workflows/finalize-clippy-fix.yml .github/workflows/final-validation.yml
+          git add src/lib.rs
+          git add -u
+          git commit -m "Fix clippy dead-code gate for test-only witness"
+          git push
