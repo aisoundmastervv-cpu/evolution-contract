@@ -1,8 +1,8 @@
 name: EEC-003 Environment Revalidation
 
 on:
-  push:
-    branches: ['cloud/eec-003-environment-revalidation']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -16,11 +16,11 @@ jobs:
       - name: Checkout exact candidate commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Establish initial conformant environment
         env:
-          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           evidence="$RUNNER_TEMP/eec-003-evidence.txt"
@@ -86,7 +86,7 @@ EOF
 
       - name: Re-enter mutation boundary and require fail-closed behavior
         env:
-          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           evidence="$RUNNER_TEMP/eec-003-evidence.txt"
