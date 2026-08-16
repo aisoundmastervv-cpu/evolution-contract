@@ -28,7 +28,7 @@ jobs:
         id: preflight
         run: |
           set +e
-          scripts/h3-preflight.sh > evidence/preflight.txt 2>&1
+          bash scripts/h3-preflight.sh > evidence/preflight.txt 2>&1
           rc=$?
           cat evidence/preflight.txt
           echo "exit_code=$rc" >> evidence/preflight.txt
@@ -38,28 +38,27 @@ jobs:
           fi
 
       - name: H3 A2 ten-trial execution
-        if: steps.preflight.outputs.unused != 'never'
         run: |
           set -euo pipefail
           grep -q 'H3_PREFLIGHT: READY' evidence/preflight.txt || exit 0
           mkdir -p evidence/trials
           : > evidence/trial-list.txt
           for i in 1 2 3 4 5; do
-            scripts/h3-run-trial.sh "e0-$i" 0 "evidence/trials/e0-$i.json" | tee -a evidence/trial-list.txt
+            bash scripts/h3-run-trial.sh "e0-$i" 0 "evidence/trials/e0-$i.json" | tee -a evidence/trial-list.txt
           done
           for i in 1 2 3 4 5; do
-            scripts/h3-run-trial.sh "e255-$i" 255 "evidence/trials/e255-$i.json" | tee -a evidence/trial-list.txt
+            bash scripts/h3-run-trial.sh "e255-$i" 255 "evidence/trials/e255-$i.json" | tee -a evidence/trial-list.txt
           done
 
           python3 - <<'PY'
-          import json, pathlib
+          import json, pathlib, subprocess
           trials=[]
           for p in sorted(pathlib.Path('evidence/trials').glob('*.json')):
               trials.append(json.loads(p.read_text()))
           bundle={
               'mapping_id':'A2-cgroup-linear-v1',
               'registration_commit':'d7f32d45c181082e01e38b4cfb529f9eed8da18a',
-              'execution_commit':__import__('subprocess').check_output(['git','rev-parse','HEAD'],text=True).strip(),
+              'execution_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
               'trials':trials,
           }
           pathlib.Path('evidence/results.json').write_text(json.dumps(bundle,indent=2,sort_keys=True)+'\n')
@@ -73,7 +72,6 @@ jobs:
             exit 0
           fi
           python3 scripts/h3-evaluate.py evidence/results.json | tee evidence/evaluation.txt
-          rc=${PIPESTATUS[0]}
           if grep -q 'H3_VERDICT: CAUSAL SUPPORT' evidence/evaluation.txt; then
             echo 'H3_STATUS=CAUSAL SUPPORT' | tee evidence/status.txt
           elif grep -q 'H3_VERDICT: NULL-FALSIFICATION' evidence/evaluation.txt; then
