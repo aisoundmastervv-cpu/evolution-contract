@@ -67,8 +67,14 @@ mod tests {
             execution: ExecutionIdentity("exec-1".into()),
             artifacts: [
                 ("contract".into(), ArtifactId("contract@frozen".into())),
-                ("state-model".into(), ArtifactId("state-model@approved".into())),
-                ("executor-spec".into(), ArtifactId("executor-spec@approved".into())),
+                (
+                    "state-model".into(),
+                    ArtifactId("state-model@approved".into()),
+                ),
+                (
+                    "executor-spec".into(),
+                    ArtifactId("executor-spec@approved".into()),
+                ),
             ]
             .into_iter()
             .collect(),
