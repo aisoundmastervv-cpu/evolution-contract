@@ -1,0 +1,90 @@
+name: H3 A2 Execution Candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  h3-a2-execution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact execution commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record provenance
+        run: |
+          mkdir -p evidence
+          git rev-parse HEAD | tee evidence/execution_commit.txt
+          printf '%s\n' 'd7f32d45c181082e01e38b4cfb529f9eed8da18a' | tee evidence/registration_commit.txt
+          uname -a | tee evidence/uname.txt
+          python3 --version | tee evidence/python_version.txt
+
+      - name: H3 A2 preflight
+        id: preflight
+        run: |
+          set +e
+          bash scripts/h3-preflight.sh > evidence/preflight.txt 2>&1
+          rc=$?
+          cat evidence/preflight.txt
+          echo "exit_code=$rc" >> evidence/preflight.txt
+          if [ "$rc" -ne 0 ]; then
+            echo 'H3_STATUS=INCONCLUSIVE' | tee evidence/status.txt
+            exit 0
+          fi
+
+      - name: H3 A2 ten-trial execution
+        run: |
+          set -euo pipefail
+          grep -q 'H3_PREFLIGHT: READY' evidence/preflight.txt || exit 0
+          mkdir -p evidence/trials
+          : > evidence/trial-list.txt
+          for i in 1 2 3 4 5; do
+            bash scripts/h3-run-trial.sh "e0-$i" 0 "evidence/trials/e0-$i.json" | tee -a evidence/trial-list.txt
+          done
+          for i in 1 2 3 4 5; do
+            bash scripts/h3-run-trial.sh "e255-$i" 255 "evidence/trials/e255-$i.json" | tee -a evidence/trial-list.txt
+          done
+
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          trials=[]
+          for p in sorted(pathlib.Path('evidence/trials').glob('*.json')):
+              trials.append(json.loads(p.read_text()))
+          bundle={
+              'mapping_id':'A2-cgroup-linear-v1',
+              'registration_commit':'d7f32d45c181082e01e38b4cfb529f9eed8da18a',
+              'execution_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+              'trials':trials,
+          }
+          pathlib.Path('evidence/results.json').write_text(json.dumps(bundle,indent=2,sort_keys=True)+'\n')
+          PY
+
+      - name: Evaluate registered criterion
+        run: |
+          set +e
+          if [ ! -f evidence/results.json ]; then
+            echo 'H3_STATUS=INCONCLUSIVE' | tee evidence/status.txt
+            exit 0
+          fi
+          python3 scripts/h3-evaluate.py evidence/results.json | tee evidence/evaluation.txt
+          if grep -q 'H3_VERDICT: CAUSAL SUPPORT' evidence/evaluation.txt; then
+            echo 'H3_STATUS=CAUSAL SUPPORT' | tee evidence/status.txt
+          elif grep -q 'H3_VERDICT: NULL-FALSIFICATION' evidence/evaluation.txt; then
+            echo 'H3_STATUS=NULL-FALSIFICATION' | tee evidence/status.txt
+          else
+            echo 'H3_STATUS=INCONCLUSIVE' | tee evidence/status.txt
+          fi
+          exit 0
+
+      - name: Upload H3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-a2-execution-evidence-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: error
