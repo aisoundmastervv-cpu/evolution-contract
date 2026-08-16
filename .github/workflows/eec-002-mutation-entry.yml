@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$EXPECTED_COMMIT"
-          printf 'expected=%s\nactual=%s\n' "$EXPECTED_COMMIT" "$actual" | tee eec-002-identity.txt
+          printf 'expected=%s\nactual=%s\n' "$EXPECTED_COMMIT" "$actual" | tee "$RUNNER_TEMP/eec-002-identity.txt"
 
       - name: Negative test — wrong identity blocks mutation
         env:
@@ -64,6 +64,8 @@ jobs:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
+          printf 'post-mutation status:\n'
+          git status --short
           if bash scripts/agent-environment-gate.sh "$EXPECTED_COMMIT"; then
             echo 'EEC-002: FAIL — dirty workspace remained mutation-ready' >&2
             exit 1
@@ -75,5 +77,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: eec-002-mutation-entry-evidence-${{ github.sha }}
-          path: eec-002-identity.txt
+          path: "$RUNNER_TEMP/eec-002-identity.txt"
           if-no-files-found: warn
