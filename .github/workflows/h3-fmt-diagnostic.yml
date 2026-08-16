@@ -2,6 +2,9 @@ name: H3 fmt diagnostic
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - h3/design-requirements-v1
 
 jobs:
   fmt-diagnostic:
