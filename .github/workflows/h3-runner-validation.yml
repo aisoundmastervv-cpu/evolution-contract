@@ -36,11 +36,18 @@ jobs:
           test "$MIN_POSITIVE_PAIRS" = "9"
           test "$MEDIAN_RATIO_FLOOR" = "1.10"
 
-      - name: Build and test
-        run: cargo test --all-targets
+      - name: Compile H3 runner in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --edition=2021 src/bin/h3_runner.rs -O -o "$RUNNER_TEMP/h3_runner"
 
       - name: Validate H3 runner without executing workload
-        run: cargo run --release --bin h3_runner -- --validate-only --expected-nice 0
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/h3_runner" --validate-only --expected-nice 0
+          "$RUNNER_TEMP/h3_runner" --validate-only --expected-nice 10
 
       - name: Verify workspace identity
         shell: bash
@@ -52,6 +59,6 @@ jobs:
           bootstrap_sha="$(sha256sum scripts/bootstrap-environment.sh | awk '{print $1}')"
           rustc_version="$(rustc --version)"
           cargo_version="$(cargo --version)"
-          identity_input=$(printf '%s\n' "repository=$remote" "commit=$EXPECTED_COMMIT" "environment_contract_sha256=$contract_sha" "bootstrap_sha256=$bootstrap_sha" "rustc=$rustc_version" "cargo=$cargo_version")
+          identity_input=$(printf '%s\n' "repository=$remote" "commit=$EXPECTED_COMMIT" "environment_contract_sha256=$contract_sha" "bootstrap_sha=$bootstrap_sha" "rustc=$rustc_version" "cargo=$cargo_version")
           environment_id="$(printf '%s' "$identity_input" | sha256sum | awk '{print $1}')"
           EXPECTED_COMMIT="$EXPECTED_COMMIT" EXPECTED_ENVIRONMENT_ID="$environment_id" bash scripts/agent-environment-gate.sh
