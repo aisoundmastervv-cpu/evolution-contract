@@ -85,6 +85,68 @@ O_B(τ1) = O_B(τ2)
 
 cannot presently be evaluated as a normative property of the model.
 
+## 4A. Derivability test against existing canonical artifacts
+
+The existing canonical artifacts were checked for whether they already induce a unique and complete `O_B` without adding new normative semantics.
+
+### Evidence found
+
+The existing execution architecture distinguishes several evidence-bearing surfaces:
+
+```text
+execution trace
+raw observation
+admissible evidence
+machine state
+verdict
+operational telemetry
+```
+
+It also requires durable persistence of these outputs and explicitly keeps operational telemetry distinct from semantic evidence. The executor remains responsible for state enforcement, evidence handling, verdict semantics, and semantic boundary enforcement.
+
+The existing Authority Capability governance review further requires a sharper evidence-materialization chain:
+
+```text
+subject observation
+    -> collected evidence
+    -> oracle evaluation
+    -> canonical verdict
+```
+
+and treats the canonical event, exact revision/hash, scope, parent event, and resulting authority state as necessary lineage components for authority transitions.
+
+### Derivability finding
+
+These artifacts establish **categories, responsibilities, lineage requirements, and persistence obligations**, but they do not uniquely define:
+
+```text
+1. the complete observation domain B;
+2. the projection O_B from execution reality/trace to canonical evidence;
+3. the completeness condition saying that every authority-relevant distinction is preserved;
+4. the execution horizon after which deferred, asynchronous, external, persistent, or concurrent effects are known to be exhausted;
+5. the formal equivalence relation under which two traces are observationally identical.
+```
+
+The cloud execution architecture explicitly distinguishes raw observations, evidence, traces, verdicts, and operational telemetry, but that taxonomy does not itself establish authority-effect completeness. Likewise, the Authority Capability review requires an evidence-materialization boundary but does not define an observation projection with the required identifiability property.
+
+Therefore the existing canonical artifacts **do not derive a unique, complete `O_B` without introducing additional normative semantics**.
+
+This is a derivability result, not yet a substantive claim that a particular hidden execution effect exists.
+
+## 4B. Consequence of derivability result
+
+The required proof obligation cannot currently be discharged from the existing artifact set:
+
+```text
+existing artifacts
+    -/-> unique complete O_B
+    -/-> authority-effect identifiability
+```
+
+Accordingly, the review remains `UNDETERMINED`.
+
+A separate design proposal may be justified to define the missing observation boundary, but this review does not create that proposal and does not select its architecture.
+
 ## 5. Verdict
 
 ```text
