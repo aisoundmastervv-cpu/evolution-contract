@@ -101,3 +101,14 @@ jobs:
 
           cat "$file"
           echo "G11b VERIFIED: independent evidence matches the current commit and expected observation."
+
+  g12c-preserve:
+    name: G12c-P preserve immutable evidence
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify preserved G12c record
+        run: python3 .github/scripts/g12c_preservation_verifier.py
