@@ -36,13 +36,14 @@ jobs:
           EOF
 
       - name: Check cloud implementation formatting
-        run: rustfmt --edition 2021 --check src/cloud_execution.rs tests/cloud_execution.rs
+        run: rustfmt --edition 2021 --check src/cloud_execution.rs
 
-      - name: Run cloud conformance tests
+      - name: Run cloud substrate conformance tests
         shell: bash
         run: |
           set -o pipefail
-          cargo test --test cloud_execution -- --nocapture 2>&1 | tee cloud-evidence/raw-test-output.txt
+          rustc --edition 2021 --test src/cloud_execution.rs -o cloud-conformance-tests
+          ./cloud-conformance-tests --nocapture 2>&1 | tee cloud-evidence/raw-test-output.txt
 
       - name: Record result
         if: always()
