@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Frozen CPU-demand workload for H3 A2 trials.
-
-The workload has no efficiency input and performs the same deterministic
-computation for every trial and condition.
-"""
+"""Frozen CPU-demand workload for H3 A2 trials."""
 import hashlib
 import signal
 import sys
 
 running = True
 
+def release(_signum, _frame):
+    pass
+
 def stop(_signum, _frame):
     global running
     running = False
 
+signal.signal(signal.SIGUSR1, release)
 signal.signal(signal.SIGTERM, stop)
 signal.signal(signal.SIGINT, stop)
 
@@ -21,8 +21,6 @@ payload = b"evolution-contract-h3-frozen-workload-v1" * 1024
 state = b"seed"
 iterations = 0
 
-# Pause before execution so the parent can attach this process to its
-# registered cgroup and CPU affinity before releasing both workloads.
 signal.pause()
 
 while running:
