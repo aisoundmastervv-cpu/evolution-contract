@@ -1,0 +1,56 @@
+name: Validate two-fix recovery
+
+on:
+  push:
+    branches: [validation/real-two-fix]
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply exactly two compiler fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("src/lib.rs")
+          s = p.read_text()
+          old1 = "            pending.push(builder.build_child(parent, pid, request.mutation_rate, ordinal)?);"
+          new1 = "            let child = builder\n                .build_child(parent, pid, request.mutation_rate, ordinal)\n                .map_err(ApplyError::Build)?;\n            pending.push(child);"
+          old2 = "                StructuralViolation::ConflictingRequest { pid: **pid },"
+          new2 = "                StructuralViolation::ConflictingRequest { pid: *pid },"
+          if s.count(old1) != 1:
+              raise SystemExit(f"expected exactly one first target, found {s.count(old1)}")
+          if s.count(old2) != 1:
+              raise SystemExit(f"expected exactly one second target, found {s.count(old2)}")
+          s = s.replace(old1, new1).replace(old2, new2)
+          p.write_text(s)
+          PY
+
+      - name: Show exact patch
+        run: git diff -- src/lib.rs
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo check
+        run: cargo check --all-targets
+
+      - name: cargo test
+        run: cargo test --all-targets -- --nocapture
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Commit validated two-fix patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib.rs
+          git commit -m "Fix two confirmed compiler errors [validation-patched]"
+          git push
