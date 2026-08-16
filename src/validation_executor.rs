@@ -126,24 +126,23 @@ fn authorized_next_state(
     transition: Transition,
 ) -> Option<MachineState> {
     use MachineState::*;
-    use Transition::*;
 
     match (state, transition) {
-        (FrozenInput, PlanAuthorize) => Some(PlanAuthorized),
-        (PlanAuthorized, RequireObservation) => Some(ObservationRequired),
-        (PlanAuthorized, Verdict(Verdict::Untested)) => Some(Verdict),
-        (ObservationRequired, ObservationExecute) => Some(ObservationExecuted),
-        (ObservationRequired, ObservationUnavailable) => Some(ObservationUnavailable),
-        (ObservationExecuted, CollectEvidence) => Some(EvidenceCollected),
-        (EvidenceCollected, EvaluateOracle) => Some(OracleEvaluated),
-        (EvidenceCollected, MarkUnderdetermined) => Some(Underdetermined),
-        (OracleEvaluated, Verdict(_)) => Some(Verdict),
-        (OracleEvaluated, MarkUnderdetermined) => Some(Underdetermined),
-        (ObservationUnavailable, ClassifyObservationGap) => Some(ObservationGap),
-        (ObservationGap, Stop) => Some(Stop),
-        (Underdetermined, Stop) => Some(Stop),
-        (NotAuthorized, Stop) => Some(Stop),
-        (Verdict, Stop) => Some(Stop),
+        (FrozenInput, Transition::PlanAuthorize) => Some(PlanAuthorized),
+        (PlanAuthorized, Transition::RequireObservation) => Some(ObservationRequired),
+        (PlanAuthorized, Transition::Verdict(Verdict::Untested)) => Some(Verdict),
+        (ObservationRequired, Transition::ObservationExecute) => Some(ObservationExecuted),
+        (ObservationRequired, Transition::ObservationUnavailable) => Some(ObservationUnavailable),
+        (ObservationExecuted, Transition::CollectEvidence) => Some(EvidenceCollected),
+        (EvidenceCollected, Transition::EvaluateOracle) => Some(OracleEvaluated),
+        (EvidenceCollected, Transition::MarkUnderdetermined) => Some(Underdetermined),
+        (OracleEvaluated, Transition::Verdict(_)) => Some(Verdict),
+        (OracleEvaluated, Transition::MarkUnderdetermined) => Some(Underdetermined),
+        (ObservationUnavailable, Transition::ClassifyObservationGap) => Some(ObservationGap),
+        (ObservationGap, Transition::Stop) => Some(Stop),
+        (Underdetermined, Transition::Stop) => Some(Stop),
+        (NotAuthorized, Transition::Stop) => Some(Stop),
+        (Verdict, Transition::Stop) => Some(Stop),
         _ => None,
     }
 }
