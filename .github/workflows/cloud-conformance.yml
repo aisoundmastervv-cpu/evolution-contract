@@ -3,7 +3,7 @@ name: EEC-003 Environment Revalidation
 on:
   push:
     branches:
-      - 'cloud/eec-003-direct-execution'
+      - 'cloud/**'
   workflow_dispatch:
 
 permissions:
