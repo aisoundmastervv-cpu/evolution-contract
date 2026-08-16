@@ -31,7 +31,7 @@ An unresolved dependency is not treated as irrelevant.
 UNRESOLVED => NOT_AUTHORIZED
 ```
 
-## 2. Canonical effect function
+## 2. Canonical effect semantics
 
 Authority-relevant effects are defined relative to a canonical semantic function:
 
@@ -48,6 +48,17 @@ where:
 
 The specification MUST define the effect universe sufficiently to distinguish authority-relevant changes.
 
+For any executor whose authority-relevant behavior depends on execution history, the state-based representation MUST be lifted to canonical trace semantics:
+
+```text
+τ = (s0, a1, s1, a2, s2, ..., an, sn)
+Eτ = G(C, S, D, τ)
+```
+
+where `τ` is the canonical execution trace and `G` determines authority-relevant effects over the trace.
+
+A single-step projection MUST NOT be assumed sufficient merely because every individual step is within the declared effect boundary.
+
 ## 3. Causal relevance criterion
 
 A dependency `d` is causally relevant iff there exist two admissible values `d1` and `d2`, with all other authorization inputs held equal, such that:
@@ -56,18 +67,43 @@ A dependency `d` is causally relevant iff there exist two admissible values `d1`
 F(C, S, D[d:=d1]) != F(C, S, D[d:=d2])
 ```
 
-If this condition holds, `d` MUST be included in the canonical dependency closure and bound by the authorization lineage.
+For trace-based semantics, the corresponding criterion is:
+
+```text
+G(C,S,D[d:=d1],τ) != G(C,S,D[d:=d2],τ)
+```
+
+or the dependency changes the set of admissible traces:
+
+```text
+TRACES(C,S,D[d:=d1]) != TRACES(C,S,D[d:=d2])
+```
+
+If either condition holds, `d` MUST be included in the canonical dependency closure and bound by the authorization lineage.
 
 The test is semantic, not syntactic. A dependency cannot be excluded merely because it is absent from a configuration file, interface, or declaration.
 
 ## 4. Independence criterion
 
-A dependency may be classified `INDEPENDENT` only when the system has a valid justification that, over its allowed domain:
+A dependency may be classified `INDEPENDENT` only when the system has a valid justification that, over its allowed domain, it cannot alter authority-relevant effects.
+
+For state-based semantics:
 
 ```text
 ∀ d1,d2:
     F(C, S, D[d:=d1]) = F(C, S, D[d:=d2])
 ```
+
+For trace-based semantics, independence MUST additionally establish:
+
+```text
+∀ d1,d2, τ1 ∈ TRACES(D[d:=d1]), τ2 ∈ TRACES(D[d:=d2]):
+    EFFECTS(τ1) = EFFECTS(τ2)
+```
+
+or an equivalent stronger refinement/noninterference relation that preserves the complete authority-relevant effect set and admissible authority-relevant traces.
+
+It is insufficient to compare only final states if intermediate effects, irreversible side effects, delegation, persistence, or authorization-relevant observations occur during execution.
 
 This is a positive noninterference claim.
 
@@ -123,6 +159,8 @@ DNS/name resolution
 external services
 resource enforcement
 dynamic plugins/extensions
+execution history / trace state
+temporal ordering / concurrency semantics
 ```
 
 This is a dependency universe, not a claim that every item is always authority-relevant.
@@ -197,6 +235,40 @@ when each individual substitution, holding the other dependency fixed at its ref
 Therefore, an `INDEPENDENT` classification is valid only when the independence claim covers the dependency's allowed joint context, including relevant interactions with other excluded dependencies.
 
 If interaction cannot be ruled out, the dependency set is `UNRESOLVED` or the interacting dependencies MUST be moved into the canonical closure.
+
+### 8.2 Temporal and trace closure
+
+A dependency cannot be classified `INDEPENDENT` merely because it does not change the effect of each individual execution step.
+
+A dependency is temporally relevant if it can change any authority-relevant property of a trace, including:
+
+```text
+step ordering
+admissible next actions
+intermediate observations
+irreversible side effects
+persistence state
+credential/delegation state
+resource exhaustion state
+concurrency/interleaving outcomes
+termination / continuation
+final authority-relevant state
+```
+
+The following counterexample is explicitly invalidating:
+
+```text
+step A: individually allowed
+step B: individually allowed
+
+A ; B
+    ↓
+new authority-relevant effect
+```
+
+If `A` and `B` are each safe under a one-step effect model but their sequence creates an effect outside the parent authority, the model MUST treat the sequence as a trace-level effect and reject the authorization unless that trace is explicitly within the canonical effect boundary.
+
+Likewise, a dependency classified `INDEPENDENT` MUST be noninterfering with respect to relevant traces, not merely isolated steps.
 
 ## 9. Ambient dependency rule
 
@@ -339,6 +411,34 @@ Expected: independence does not transfer across semantic context; the new contex
 Multiple dependencies excluded from the closure interact through an unmodeled relation, even though each pairwise single-variable test appears independent.
 
 Expected: the excluded dependency set is not `INDEPENDENT` until joint noninterference is established; otherwise `UNRESOLVED`.
+
+### CED-011 — emergent sequential effect
+
+Each action `a_i` is individually within the declared effect boundary, but a valid sequence `a1 ; a2 ; ... ; an` creates an authority-relevant effect that no individual action creates.
+
+Expected: the effect model MUST evaluate the relevant trace; stepwise independence is insufficient. Authorization is invalid unless the emergent trace effect is explicitly accounted for.
+
+### CED-012 — order sensitivity
+
+The same set of actions produces different authority-relevant effects under different orderings:
+
+```text
+A ; B != B ; A
+```
+
+Expected: execution ordering is part of canonical trace semantics whenever it can affect authority-relevant effects.
+
+### CED-013 — intermediate-state authority
+
+The final state is identical across two traces, but one trace produces an irreversible intermediate side effect, delegation, observation, persistence change, or external action.
+
+Expected: final-state equality does not establish noninterference; trace-level effects MUST distinguish the executions.
+
+### CED-014 — concurrency/interleaving emergence
+
+Each action is individually safe and each pairwise sequential trace is safe, but concurrent/interleaved execution creates an authority-relevant effect.
+
+Expected: if concurrency is admissible, the canonical trace semantics MUST include the relevant interleavings or provide a stronger proof that all admissible interleavings are noninterfering.
 
 ## 15. Governance boundary
 
