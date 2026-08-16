@@ -1,107 +1,293 @@
-# Authority Capability Model v0.1 — Draft Design
+# Authority Capability Model v0.1
 
-**Status:** DRAFT / NOT ADMITTED
+Status: DRAFT / NOT ADMITTED
 
-**Purpose:** define the authority boundary between an autonomous execution subject and the governance/evaluation layers before any `AuthorizedExecutionToken` or enforcement implementation is introduced.
+## 1. Purpose
 
-## 1. Core principle
+Define the authority boundaries between an autonomous execution subject, governance authority, executor, and evaluation/oracle authority.
 
-> **Autonomous agency without self-authorizing epistemic authority.**
+This document is a design proposal only. It creates no authority, grants no execution permission, and does not authorize implementation of an `AuthorizedExecutionToken`.
 
-An autonomous execution subject may act, mutate, propose, execute an already-authorized plan, and produce permitted observations. It must not possess the authority required to define, alter, authorize, or retroactively validate the conditions under which its own execution is considered evidence or success.
+## 2. Core invariant
 
-## 2. Authority domains
+> An autonomous execution subject may exercise agency within an authorized scope, but it cannot create, modify, extend, or retroactively validate the authority under which its own execution is judged.
 
-### 2.1 Execution subject
-
-Permitted capabilities, subject to an already-authorized execution scope:
-
-- `PROPOSE`
-- `MUTATE_WITHIN_SCOPE`
-- `EXECUTE_AUTHORIZED_PLAN`
-- `OBSERVE_PERMITTED_SURFACES`
-- `APPEND_EXECUTION_EVIDENCE`
-- `REQUEST_NEW_AUTHORIZATION`
-
-The subject may not mint, modify, or escalate authority.
-
-### 2.2 Governance authority
-
-Reserved capabilities:
-
-- `ADMIT_PROPOSAL`
-- `AUTHORIZE_EXECUTION`
-- `FREEZE_BASELINE`
-- `DEFINE_ORACLE`
-- `DEFINE_ACCEPTANCE_CRITERIA`
-- `DEFINE_EXECUTION_SCOPE`
-- `REVOKE_AUTHORIZATION`
-- `ISSUE_AUTHORIZATION_PROOF`
-
-### 2.3 Evaluation/oracle authority
-
-Reserved capabilities:
-
-- `EVALUATE_EVIDENCE`
-- `ISSUE_VERDICT`
-- `DECLARE_UNDERDETERMINED`
-- `DECLARE_OBSERVATION_GAP`
-
-The execution subject cannot exercise these capabilities on its own execution lineage.
-
-## 3. Capabilities that are forbidden to the autonomous subject
-
-The following capabilities are authority-prohibited and must not be exposed through the subject's capability surface:
-
-1. `AUTHORIZE_EXECUTION`
-2. `MODIFY_CONTRACT`
-3. `MODIFY_STATE_MODEL`
-4. `MODIFY_EXECUTOR_SPEC`
-5. `MODIFY_ORACLE`
-6. `MODIFY_ACCEPTANCE_CRITERIA`
-7. `MODIFY_FROZEN_BASELINE`
-8. `DELETE_OR_REWRITE_EVIDENCE`
-9. `ALTER_PROVENANCE`
-10. `ISSUE_OR_ESCALATE_OWN_AUTHORITY`
-
-These prohibitions are normative design requirements. They are not yet claimed to be machine-enforced by this document.
-
-## 4. Capability separation invariant
-
-For authority-changing operations:
+The following distinctions are normative:
 
 ```text
-SubjectCapabilities ∩ GovernanceAuthorityCapabilities = ∅
+execution != authorization
+authority != capability
+evidence != verdict
+observation != semantic validation
+artifact existence != approval
 ```
 
-The execution subject must not be able to construct an object that represents governance authority merely by invoking its own APIs.
+## 3. Authority domains
 
-## 5. Evidence boundary
+### 3.1 Execution Subject
 
-The execution subject may append raw execution events and permitted observations. Evidence storage for an authorized lineage should be append-only from the subject's perspective.
+May, when authorized:
 
-The subject must not be able to:
+- propose changes;
+- execute an already authorized plan;
+- perform actions within the authorized scope;
+- emit append-only execution observations/events;
+- request additional authorization.
 
-- delete an observation;
-- rewrite an observation;
-- replace a failed execution with a successful one;
-- alter event ancestry;
-- alter the frozen baseline identity;
-- alter the oracle or acceptance criteria after authorization.
+May not:
 
-Operational failure must remain distinguishable from semantic verdict.
+- authorize its own execution;
+- issue or escalate its own authority;
+- modify the Contract, State Model, Executor Specification, Oracle, acceptance criteria, or frozen baseline applicable to its execution;
+- rewrite or delete canonical evidence or provenance;
+- issue a semantic verdict on its own execution.
 
-## 6. Authorization proof boundary
+### 3.2 Governance Authority
 
-Future execution authorization must be represented by a non-forgeable authorization proof, tentatively named:
+May create canonical governance events within its granted governance scope:
+
+- register/admit a proposal;
+- approve a design revision;
+- grant or revoke execution authorization;
+- define or approve authority policy;
+- freeze a baseline;
+- approve the authority of an evaluator/oracle.
+
+Governance authority does not imply permission to execute the authorized subject action.
+
+### 3.3 Executor
+
+May validate an authorization proof and execute only within its encoded scope.
+
+The executor must not infer authorization from:
+
+- file existence;
+- branch existence;
+- workflow existence;
+- implementation presence;
+- proposal status alone;
+- human-readable claims without a canonical event.
+
+### 3.4 Evaluation / Oracle Authority
+
+May evaluate evidence according to an already authorized evaluation contract and issue the corresponding evaluation/verdict event.
+
+It may not retroactively alter the baseline or execution authorization that produced the evidence it evaluates.
+
+## 4. Capability registry
+
+The following capabilities are normative categories for review:
+
+| Capability | Execution Subject | Governance | Executor | Oracle |
+|---|---:|---:|---:|---:|
+| PROPOSE | YES | YES | NO | NO |
+| EXECUTE_AUTHORIZED | YES | YES | YES | NO |
+| ADMIT_PROPOSAL | NO | YES | NO | NO |
+| APPROVE_DESIGN | NO | YES | NO | NO |
+| AUTHORIZE_EXECUTION | NO | YES | NO | NO |
+| REVOKE_AUTHORIZATION | NO | YES | NO | NO |
+| DEFINE_CONTRACT | NO | YES* | NO | NO |
+| DEFINE_STATE_MODEL | NO | YES* | NO | NO |
+| DEFINE_EXECUTOR_SPEC | NO | YES* | NO | NO |
+| DEFINE_ORACLE | NO | YES* | NO | YES* |
+| DEFINE_ACCEPTANCE_CRITERIA | NO | YES* | NO | YES* |
+| FREEZE_BASELINE | NO | YES | NO | NO |
+| APPEND_OBSERVATION | YES | YES | YES | YES |
+| REWRITE_EVIDENCE | NO | NO | NO | NO |
+| DELETE_CANONICAL_EVIDENCE | NO | NO | NO | NO |
+| ALTER_PROVENANCE | NO | NO | NO | NO |
+| ISSUE_OWN_AUTHORITY | NO | NO | NO | NO |
+| DECLARE_VERDICT | NO | NO | NO | YES |
+
+`*` Requires an independently scoped governance event and must not be performed unilaterally by an execution subject.
+
+## 5. Canonical event taxonomy
+
+Authority is materialized only by a canonical event. The minimum event classes are:
 
 ```text
-AuthorizedExecutionToken
+PROPOSAL_REGISTERED
+PROPOSAL_ADMITTED
+DESIGN_APPROVED
+EXECUTION_AUTHORIZED
+EXECUTION_REVOKED
+AUTHORITY_EXPIRED
+BASELINE_FROZEN
+EVIDENCE_APPENDED
+EVIDENCE_EVALUATED
+VERDICT_ISSUED
 ```
 
-The token is a future design object, not an implementation introduced by this draft.
+A file, branch, workflow, implementation, token-shaped value, or status string is not itself an authority event.
 
-The intended proof binding is:
+## 6. Canonical event requirements
+
+Every authority-bearing canonical event MUST bind all of the following:
+
+```text
+actor_id
+actor_authority_domain
+event_id
+event_type
+object_id
+object_revision
+object_hash
+scope
+issued_at
+valid_from
+valid_until
+parent_event_id
+```
+
+Where applicable it MUST also bind:
+
+```text
+contract_hash
+plan_hash
+baseline_hash
+oracle_hash
+executor_spec_hash
+authorization_id
+reason / disposition
+```
+
+### 6.1 Exact object identity
+
+Authority is bound to an exact object revision, not a mutable name.
+
+Therefore:
+
+```text
+object_id alone != sufficient identity
+object_id + revision/hash = identity
+```
+
+A later revision does not inherit authority merely because it has the same object ID.
+
+### 6.2 Scope
+
+Every authority grant MUST explicitly state its scope. Scope may constrain, as applicable:
+
+- object;
+- revision;
+- execution type;
+- environment;
+- executor identity/specification;
+- dataset/artifact identity;
+- resource boundary;
+- maximum execution count;
+- time window.
+
+An unspecified scope MUST NOT be interpreted as unlimited scope.
+
+### 6.3 Time validity
+
+Every authority grant MUST have explicit temporal validity:
+
+```text
+valid_from
+valid_until
+```
+
+If `valid_until` is absent, the event is invalid for execution authorization unless a higher-level contract explicitly defines a bounded lifetime. No authority is perpetual by default.
+
+## 7. Authority state transitions
+
+The normative progression is:
+
+```text
+DRAFT
+  │
+  ├── PROPOSAL_REGISTERED
+  ▼
+REGISTERED
+  │
+  ├── PROPOSAL_ADMITTED
+  ▼
+ADMITTED
+  │
+  ├── DESIGN_APPROVED
+  ▼
+DESIGN_APPROVED
+  │
+  ├── EXECUTION_AUTHORIZED
+  ▼
+EXECUTION_AUTHORIZED
+  │
+  ├── EXECUTION_REVOKED
+  ├── AUTHORITY_EXPIRED
+  └── EXECUTION_COMPLETED
+```
+
+The following transitions are forbidden:
+
+```text
+DRAFT → EXECUTION_AUTHORIZED
+REGISTERED → EXECUTION_AUTHORIZED
+ADMITTED → EXECUTION_AUTHORIZED
+DESIGN_APPROVED → VERDICT
+EXECUTION → AUTHORIZE_OWN_EXECUTION
+OBSERVATION → VERDICT_BY_SUBJECT
+```
+
+Admission therefore never implies design approval, and design approval never implies execution authorization.
+
+## 8. Authority non-escalation
+
+An authority-bearing actor MUST NOT be able to create an event whose authority domain is greater than the authority domain granted to that actor.
+
+In particular:
+
+```text
+execution_subject
+    cannot create
+        PROPOSAL_ADMITTED
+        DESIGN_APPROVED
+        EXECUTION_AUTHORIZED
+        EXECUTION_REVOKED
+```
+
+unless an independent governance contract explicitly delegates that exact authority. Such delegation itself must be represented by a canonical, scoped, time-bounded event.
+
+Delegation MUST NOT permit self-authorization or authority escalation.
+
+## 9. Provenance and lineage
+
+Every downstream authority event MUST reference its parent event.
+
+Example:
+
+```text
+PROPOSAL_REGISTERED
+        │
+        ▼
+PROPOSAL_ADMITTED
+        │
+        ▼
+DESIGN_APPROVED
+        │
+        ▼
+EXECUTION_AUTHORIZED
+        │
+        ▼
+EXECUTION
+        │
+        ▼
+EVIDENCE_EVALUATED
+        │
+        ▼
+VERDICT_ISSUED
+```
+
+An event with no valid parent lineage MUST NOT be accepted as authority-bearing.
+
+A later event cannot repair a missing earlier authority event retroactively.
+
+## 10. Non-forgeability requirement for future authorization proofs
+
+This model intentionally does NOT define the implementation of `AuthorizedExecutionToken`.
+
+It does, however, define its required semantic inputs. Any future authorization proof MUST be derived from a valid canonical `EXECUTION_AUTHORIZED` event and MUST be bound to the exact:
 
 ```text
 contract_hash
@@ -111,128 +297,54 @@ oracle_hash
 executor_spec_hash
 execution_id
 authorization_id
+scope
+valid_from
+valid_until
 ```
 
-The autonomous subject must not be able to mint or modify this proof.
+The execution subject MUST NOT possess the authority/capability required to mint or alter such a proof.
 
-An executor accepting an execution request must require a valid authorization proof rather than treating the existence of an `ExecutionPlan` as sufficient authority.
+## 11. Evidence boundary
 
-## 7. Non-retroactivity invariant
+Execution subjects may append observations/events but may not mutate canonical evidence after commitment.
 
-No current execution result, observation, or subject-generated claim may acquire authority to rewrite historical evidence or its governance lineage.
+Operational failure MUST NOT be converted by the subject into a semantic verdict.
 
-In particular:
+Examples:
 
 ```text
-current_result != authority_to_rewrite_baseline
-current_observation != authority_to_define_oracle
-execution != authorization
-subject_claim != verdict
+OBSERVATION_UNAVAILABLE != FAIL
+EXECUTION_ABORTED != FAIL
+MISSING_EVIDENCE != PASS
 ```
 
-## 8. Escalation invariant
+The resulting state must remain within the Validation Machine semantics.
 
-Authority escalation must not be reachable through the execution subject's capability graph.
+## 12. Governance review criteria
 
-The following path must be impossible:
+This model is ready for admission only if governance can verify all of the following:
+
+1. Every authority type has a named holder/domain.
+2. Every authority-bearing transition has a canonical event type.
+3. Every event binds an exact object revision/hash.
+4. Every grant has explicit scope.
+5. Every grant has explicit temporal validity.
+6. Every downstream authority event has valid parent lineage.
+7. Admission, design approval, and execution authorization are distinct events.
+8. The execution subject cannot issue or escalate its own authority.
+9. The executor can reject execution without a valid canonical authorization event.
+10. Evidence and verdict authority are separate from execution authority.
+11. Revocation and expiry invalidate downstream execution capability.
+12. Artifact existence cannot be interpreted as approval.
+
+## 13. Current status
 
 ```text
-SUBJECT
-  -> modify authorization
-  -> gain governance capability
-  -> authorize own execution
+DESIGN STATUS: DRAFT
+ADMISSION STATUS: NOT ADMITTED
+IMPLEMENTATION AUTHORIZATION: NOT GRANTED
+AUTHORIZED EXECUTION TOKEN: NOT DEFINED / NOT IMPLEMENTED
+ENFORCEMENT IMPLEMENTATION: NOT AUTHORIZED
 ```
 
-Authority-changing operations must originate from a distinct authority domain.
-
-## 9. Enforcement layers — design target
-
-Machine enforcement is expected to use defense in depth:
-
-```text
-Semantic Contract
-        ↓
-Capability-scoped API
-        ↓
-Typed authorization proof
-        ↓
-Reference Executor validation
-        ↓
-Sandbox / OS / container boundary
-        ↓
-Append-only evidence persistence
-```
-
-No single layer should be treated as the sole enforcement mechanism.
-
-## 10. Proposed capability matrix
-
-| Capability | Subject | Governance | Oracle/Evaluator | Executor |
-|---|---:|---:|---:|---:|
-| `PROPOSE` | YES | YES | NO | NO |
-| `MUTATE_WITHIN_SCOPE` | YES | YES | NO | NO |
-| `EXECUTE_AUTHORIZED_PLAN` | YES | YES | NO | YES |
-| `OBSERVE_PERMITTED_SURFACES` | YES | YES | YES | YES |
-| `APPEND_EXECUTION_EVIDENCE` | YES | YES | YES | YES |
-| `ADMIT_PROPOSAL` | NO | YES | NO | NO |
-| `AUTHORIZE_EXECUTION` | NO | YES | NO | NO |
-| `FREEZE_BASELINE` | NO | YES | NO | NO |
-| `DEFINE_ORACLE` | NO | YES | YES | NO |
-| `DEFINE_ACCEPTANCE_CRITERIA` | NO | YES | YES | NO |
-| `MODIFY_FROZEN_BASELINE` | NO | NO | NO | NO |
-| `DELETE_OR_REWRITE_EVIDENCE` | NO | NO | NO | NO |
-| `ALTER_PROVENANCE` | NO | NO | NO | NO |
-| `ISSUE_OR_ESCALATE_OWN_AUTHORITY` | NO | YES* | NO | NO |
-| `ISSUE_VERDICT` | NO | NO | YES | NO |
-
-`*` Only an explicitly designated governance authority may issue authority; the execution subject cannot self-issue or escalate it.
-
-## 11. Explicit non-goals of this draft
-
-This draft does **not**:
-
-- authorize any new execution;
-- change H3 thresholds;
-- change the frozen H3 evidence;
-- introduce `AuthorizedExecutionToken` implementation;
-- modify the existing H3 runner;
-- grant the autonomous subject any new authority;
-- establish a canonical execution authorization event.
-
-## 12. Relationship to H3-CAP-001
-
-`H3-CAP-001` remains:
-
-```text
-ADMITTED
-```
-
-with:
-
-```text
-execution authorization = NOT GRANTED
-```
-
-This draft is a design artifact for the next architectural stage. Its existence does not alter that boundary.
-
-## 13. Required next governance step
-
-Before implementing `AuthorizedExecutionToken` or enforcement code, this draft must undergo a separate governance/design review and receive its own disposition.
-
-The intended sequence is:
-
-```text
-Authority Capability Model v0.1
-        ↓
-GOVERNANCE / DESIGN REVIEW
-        ↓
-ADMIT or REQUEST REVISION or REJECT
-        ↓
-AuthorizedExecutionToken design
-        ↓
-enforcement design
-        ↓
-implementation
-```
-
-Until that sequence is separately authorized, no new execution authority is created.
+This document is therefore a design candidate, not a source of authority.
