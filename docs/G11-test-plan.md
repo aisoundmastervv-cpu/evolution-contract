@@ -4,7 +4,7 @@ Status: **ACCEPTED — HARNESS MAY BE IMPLEMENTED**
 
 ## Purpose
 
-Define the positive, negative, and boundary cases for G11 strictly from the frozen semantic baseline. This document does not change the Claim or Oracle.
+Define the positive, negative, and boundary cases for G11 strictly from the frozen semantic baseline. This document does not change the Claim or Oracle and does not authorize production changes or test execution.
 
 ## Frozen inputs
 
@@ -30,7 +30,7 @@ Tests may operationalize the frozen predicates. They may not add new semantic re
 
 ## Traceability matrix
 
-Every semantic test case maps to an already-frozen oracle predicate and an already-frozen Contract v1.0 rule. The matrix is closed: adding a case requires a documented reason that it is needed to operationalize an existing predicate; it may not introduce a new semantic requirement.
+Every semantic test case must map to an already-frozen oracle predicate and an already-frozen Contract v1.0 rule. The matrix is closed: adding a case requires a documented reason that it is needed to operationalize an existing predicate; it may not introduce a new semantic requirement.
 
 | Test | Role | Oracle | Contract v1.0 source | Frozen expected observation |
 |---|---|---|---|---|
@@ -43,7 +43,7 @@ Every semantic test case maps to an already-frozen oracle predicate and an alrea
 | TC-N04 | Negative | O1-D | §4 Temporal tolerance | Stale request does not cause plan-wide failure or invalidate unrelated valid request |
 | TC-B01 | Boundary | O1-B | §3 Structural validation | Invalid plan remains zero-mutation despite earlier mutation opportunities |
 | TC-B02 | Boundary | O1-C | §5 Build phase | Build failure remains zero committed evolution despite earlier mutation opportunities |
-| TC-B03 | Boundary | O1-D | §4 Temporal tolerance | Stale request does not invalidate unrelated valid work in either ordering |
+| TC-B03 | Boundary | O1-D | §4 Temporal tolerance | Stale request remains individually tolerated while unrelated valid work remains eligible |
 | TC-B04 | Boundary | O1-A | §1 Protection and capability safety | Structural validity cannot bypass capability safety |
 
 ## Positive / control cases
@@ -118,15 +118,15 @@ Arrange the request so that a naive implementation could commit earlier effects 
 
 **Expected:** O1-C remains satisfied: no committed evolution mutation.
 
-### TC-B03 — Stale request ordering
+### TC-B03 — Stale request coexisting with unrelated valid work
 
-Run the same stale + unrelated-valid fixture with the stale request before and after the unrelated valid request.
+The plan model represents deaths and branches as separate request collections rather than one ordered request stream. Therefore this boundary case does **not** claim to test an ordering dimension that the contract data model does not represent. It repeats the mixed stale + valid shape as a boundary fixture to ensure the stale request cannot suppress the valid request.
 
-**Expected:** O1-D remains satisfied in either ordering; the stale request does not invalidate unrelated valid work.
+**Expected:** O1-D remains satisfied: the stale request is tolerated and unrelated valid work remains eligible.
 
 ### TC-B04 — Capability failure combined with otherwise valid structure
 
-Make the plan structurally valid but target an `Immune` or `Protected` entity.
+Make the plan structurally valid but target an `Immune` or `Protected` entity at the capability boundary.
 
 **Expected:** O1-A rejects admission; structural validity must not bypass capability safety.
 
@@ -156,15 +156,14 @@ A harness failure, missing evidence, or inability to evaluate a predicate is **N
 
 ## Explicit prohibitions
 
-- No G11 production changes are authorized by this document.
-- No G11 execution is authorized by this document.
-- C1/O1 remain immutable.
-- No semantic requirements may be added from current implementation behavior.
+Before this plan is reviewed and accepted:
+
+- no G11 production changes;
+- no G11 test implementation;
+- no G11 execution;
+- no modification of C1/O1;
+- no addition of semantic requirements derived from current implementation behavior.
 
 ## Review gate
 
-**Review result: ACCEPTED.**
-
-The matrix has been reviewed against frozen Contract v1.0 and frozen G11.1. Every semantic case maps to an existing oracle predicate and contract rule; no case adds a new semantic requirement.
-
-**Authorization:** implementation of the G11 test harness may now begin. Harness implementation must remain mechanically derived from this accepted matrix and may not alter C1/O1.
+This test plan is accepted after traceability review against frozen Contract v1.0 and frozen G11.1. The plan authorizes implementation of a test-only harness, but not production semantic changes or G11 execution.
