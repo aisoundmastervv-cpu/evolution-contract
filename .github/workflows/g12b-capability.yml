@@ -1,0 +1,103 @@
+name: G12b Capability Revocation
+
+on:
+  push:
+    branches: [g12b-capability-revocation]
+  workflow_dispatch:
+
+jobs:
+  g12b:
+    name: G12b evidence-loss authorization test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Observe capability evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p g12b
+          cat > g12b/evidence.json <<EOF
+          {
+            "gate": "G12b",
+            "hypothesis": "authorization is revoked when its required evidence is unavailable",
+            "evidence_id": "g12b-${GITHUB_SHA}",
+            "decision": "REPAIR_REQUIRED",
+            "scope": ["isolated-test-scope"],
+            "constraints": ["no-production-code", "no-workflow-mutation", "no-force-push"]
+          }
+          EOF
+
+      - name: Independently reconstruct authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+
+          evidence = Path("g12b/evidence.json")
+          raw = evidence.read_bytes()
+          data = json.loads(raw)
+          digest = hashlib.sha256(raw).hexdigest()
+
+          authorization = {
+              "capability": "EXECUTE_BOUNDED_MUTATION",
+              "authorized": evidence.exists() and data["decision"] == "REPAIR_REQUIRED",
+              "provenance": {
+                  "gate": data["gate"],
+                  "evidence_id": data["evidence_id"],
+                  "evidence_sha256": digest,
+              },
+              "scope": data["scope"],
+              "constraints": data["constraints"],
+              "revocation": "deny when required evidence is unavailable or cannot be verified",
+          }
+
+          assert authorization["authorized"] is True
+          assert authorization["provenance"]["gate"] == "G12b"
+          assert authorization["scope"] == ["isolated-test-scope"]
+          Path("g12b/authorization.json").write_text(
+              json.dumps(authorization, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Negative experiment — remove the evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm g12b/evidence.json
+
+      - name: Re-evaluate authorization after evidence loss
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          authorization = json.loads(Path("g12b/authorization.json").read_text(encoding="utf-8"))
+          evidence = Path("g12b/evidence.json")
+
+          reconstructed_authorized = evidence.exists()
+          assert reconstructed_authorized is False
+          assert authorization["revocation"].startswith("deny when required evidence is unavailable")
+
+          result = {
+              "gate": "G12b",
+              "hypothesis": "authorization is revoked when its required evidence is unavailable",
+              "evidence_present_after_removal": evidence.exists(),
+              "authorization_granted_after_evidence_loss": reconstructed_authorized,
+              "observed_outcome": "DENY",
+          }
+          Path("g12b/result.json").write_text(
+              json.dumps(result, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(result, indent=2))
+          PY
+
+      - name: Publish immutable gate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: g12b-evidence-${{ github.sha }}
+          path: g12b/*.json
