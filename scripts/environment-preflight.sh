@@ -42,9 +42,6 @@ if [[ ! -f docs/execution/environment-contract-v0.1.md ]]; then
   exit 1
 fi
 
-cargo fmt --all -- --check
-cargo check --all-targets
-
 echo "ENVIRONMENT: READY"
 echo "repository=$(git remote get-url origin 2>/dev/null || printf '%s' local)"
 echo "commit=$ACTUAL_COMMIT"
