@@ -1,0 +1,86 @@
+name: Environment Reproducibility
+
+on:
+  push:
+    branches: [main, 'architecture/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  destroy-and-rebootstrap:
+    name: destroy workspace and reproduce environment
+    runs-on: ubuntu-latest
+    env:
+      TARGET_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      REPOSITORY_URL: https://github.com/${{ github.repository }}.git
+    steps:
+      - name: Checkout test harness
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Bootstrap environment #1
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/evolution-env-1" "$RUNNER_TEMP/evolution-env-2"
+          bash scripts/bootstrap-environment.sh \
+            "$REPOSITORY_URL" \
+            "$TARGET_COMMIT" \
+            "$RUNNER_TEMP/evolution-env-1" | tee "$RUNNER_TEMP/bootstrap-1.txt"
+          grep '^BOOTSTRAP: READY$' "$RUNNER_TEMP/bootstrap-1.txt"
+          test -s "$RUNNER_TEMP/evolution-env-1/environment-identity.json"
+          cp "$RUNNER_TEMP/evolution-env-1/environment-identity.json" "$RUNNER_TEMP/identity-1.json"
+
+      - name: Destroy workspace #1
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/evolution-env-1"
+          test ! -e "$RUNNER_TEMP/evolution-env-1"
+
+      - name: Bootstrap environment #2
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/bootstrap-environment.sh \
+            "$REPOSITORY_URL" \
+            "$TARGET_COMMIT" \
+            "$RUNNER_TEMP/evolution-env-2" | tee "$RUNNER_TEMP/bootstrap-2.txt"
+          grep '^BOOTSTRAP: READY$' "$RUNNER_TEMP/bootstrap-2.txt"
+          test -s "$RUNNER_TEMP/evolution-env-2/environment-identity.json"
+          cp "$RUNNER_TEMP/evolution-env-2/environment-identity.json" "$RUNNER_TEMP/identity-2.json"
+
+      - name: Verify reproducible identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          ID1="$(grep -o '"environment_id": "[^"]*"' "$RUNNER_TEMP/identity-1.json" | cut -d'"' -f4)"
+          ID2="$(grep -o '"environment_id": "[^"]*"' "$RUNNER_TEMP/identity-2.json" | cut -d'"' -f4)"
+          test -n "$ID1"
+          test "$ID1" = "$ID2"
+          grep -q '"commit": "' "$RUNNER_TEMP/identity-2.json"
+          echo "REPRODUCIBILITY: PASS"
+          echo "environment_id=$ID1"
+          echo "commit=$TARGET_COMMIT"
+
+      - name: Upload reproducibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-reproducibility-evidence-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/bootstrap-1.txt
+            ${{ runner.temp }}/bootstrap-2.txt
+            ${{ runner.temp }}/identity-1.json
+            ${{ runner.temp }}/identity-2.json
+          if-no-files-found: error
