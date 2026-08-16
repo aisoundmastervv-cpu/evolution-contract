@@ -17,12 +17,11 @@ on:
 permissions:
   contents: read
 
-env:
-  EEC_EVIDENCE: ${{ runner.temp }}/eec-003-evidence.txt
-
 jobs:
   eec-003:
     runs-on: ubuntu-24.04
+    env:
+      EEC_EVIDENCE: ${{ runner.temp }}/eec-003-evidence.txt
     steps:
       - name: Checkout exact candidate commit
         uses: actions/checkout@v4
@@ -49,7 +48,6 @@ jobs:
             "rustc=$rustc_version" \
             "cargo=$cargo_version")
           environment_id="$(printf '%s' "$identity_input" | sha256sum | awk '{print $1}')"
-          export EXPECTED_ENVIRONMENT_ID="$environment_id"
           {
             printf 'expected_commit=%s\n' "$EXPECTED_COMMIT"
             printf 'initial_remote=%s\n' "$remote"
@@ -59,9 +57,9 @@ jobs:
             printf 'initial_rustc=%s\n' "$rustc_version"
             printf 'initial_cargo=%s\n' "$cargo_version"
           } | tee "$EEC_EVIDENCE"
-          EXPECTED_COMMIT="$EXPECTED_COMMIT" EXPECTED_ENVIRONMENT_ID="$EXPECTED_ENVIRONMENT_ID" bash scripts/agent-environment-gate.sh | tee -a "$EEC_EVIDENCE"
+          EXPECTED_COMMIT="$EXPECTED_COMMIT" EXPECTED_ENVIRONMENT_ID="$environment_id" bash scripts/agent-environment-gate.sh | tee -a "$EEC_EVIDENCE"
           echo 'EEC-003: initial READY established' | tee -a "$EEC_EVIDENCE"
-          printf 'EXPECTED_ENVIRONMENT_ID=%s\n' "$EXPECTED_ENVIRONMENT_ID" >> "$GITHUB_ENV"
+          printf 'EXPECTED_ENVIRONMENT_ID=%s\n' "$environment_id" >> "$GITHUB_ENV"
 
       - name: Record baseline repository state
         run: |
