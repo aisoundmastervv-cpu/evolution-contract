@@ -1,6 +1,6 @@
 # LifeGraph Test Plan v1
 
-Status: **REVIEWED DRAFT — EXECUTION NOT AUTHORIZED**
+Status: **FROZEN**
 
 ## Frozen inputs
 
@@ -8,6 +8,8 @@ Status: **REVIEWED DRAFT — EXECUTION NOT AUTHORIZED**
 - Frozen semantic baseline: `docs/gates/lifegraph-semantic-baseline-v1.md`
 - Claim: **C-LG**
 - Oracle: **O-LG**
+- Adversarial review: `docs/gates/lifegraph-test-plan-v1-adversarial-review.md`
+- Repeat review: `docs/gates/lifegraph-test-plan-v1-repeat-review.md`
 
 This plan is derived only from the frozen C-LG/O-LG baseline. It does not modify, reinterpret, or extend either one.
 
@@ -127,25 +129,27 @@ The following are explicitly excluded because they are not frozen C-LG/O-LG requ
 
 ## 6. Matrix review criteria
 
-Before implementation is authorized, each case must be reviewed for:
+The matrix was reviewed for:
 
 1. direct traceability to a frozen C-LG/O-LG clause;
 2. an observable expected outcome;
 3. a falsifiable failure condition;
 4. absence of implementation-specific assumptions;
 5. no dependence on another case's hidden mutable state;
-6. no modification of C-LG/O-LG to accommodate the case.
+6. no modification of C-LG/O-LG to accommodate a case.
+
+The adversarial review and repeat review passed these criteria after the four narrow test-plan clarifications.
 
 ## 7. Authorization boundary
 
-This document is a test-plan draft. It authorizes **review of the matrix only**.
+This frozen test plan authorizes **design and implementation of the LifeGraph test harness strictly from this matrix**.
 
 It does not authorize:
 
-- test harness implementation;
-- changes to production code;
 - changes to C-LG/O-LG;
-- G12 workflow execution;
-- a G12 verdict.
+- changes to Contract v1.0;
+- changes to production semantics for the purpose of passing tests;
+- execution of the harness as a Gate verdict;
+- a G12 verdict without a separately registered execution/evidence record.
 
-Implementation may begin only after the matrix passes review and this plan is explicitly accepted/frozen as the test baseline.
+Any future test-case change requires a new review and an explicit update to this frozen baseline before implementation or execution.
