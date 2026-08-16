@@ -73,6 +73,8 @@ This is a positive noninterference claim.
 
 Empirical observation alone is not sufficient to establish universal independence unless the tested domain is itself the complete normative domain and the test provides exhaustive coverage of that domain.
 
+Independence is a property of the dependency **in context**, not a permanent intrinsic property of a dependency class. A dependency proven independent for one `C`, `S`, effect universe, or domain is not thereby independent for another.
+
 ## 5. Dependency states
 
 Every dependency considered by the specification MUST have exactly one of these states:
@@ -127,6 +129,8 @@ This is a dependency universe, not a claim that every item is always authority-r
 
 Each candidate MUST be classified `BOUND`, `INDEPENDENT`, or `UNRESOLVED`.
 
+The universe itself is canonical input to authorization. A child artifact, token, executor, or runtime MUST NOT silently shrink, reinterpret, or replace the universe or its allowed domains.
+
 ## 7. Dependency record
 
 Each canonical dependency record SHOULD contain:
@@ -149,6 +153,8 @@ DependencyRecord {
 
 The record MUST make it possible to determine why a dependency is in the closure, why it is proven independent, or why authorization is blocked.
 
+For an `INDEPENDENT` dependency, `allowed_domain` MUST itself be canonical, bounded, and bound to the same authorization lineage. It MUST NOT be a mutable or executor-selected domain.
+
 ## 8. Closure completeness
 
 For every authority-relevant effect `e`:
@@ -168,6 +174,29 @@ PROVEN_NONINTERFERING(d)
 The closure is therefore complete by construction: an effect dependency is either bound or independently proven irrelevant.
 
 There is no fourth state such as `probably irrelevant`, `ambient but trusted`, or `implementation detail`.
+
+### 8.1 Joint noninterference
+
+Independence MUST be established for the relevant dependency set, not merely one dependency at a time.
+
+It is insufficient to prove:
+
+```text
+D1 independent in isolation
+D2 independent in isolation
+```
+
+if their composition can alter effects:
+
+```text
+F(C,S,D1=x1,D2=y1) != F(C,S,D1=x2,D2=y2)
+```
+
+when each individual substitution, holding the other dependency fixed at its reference value, appears noninterfering.
+
+Therefore, an `INDEPENDENT` classification is valid only when the independence claim covers the dependency's allowed joint context, including relevant interactions with other excluded dependencies.
+
+If interaction cannot be ruled out, the dependency set is `UNRESOLVED` or the interacting dependencies MUST be moved into the canonical closure.
 
 ## 9. Ambient dependency rule
 
@@ -231,7 +260,23 @@ boundary completeness
 
 Both properties are required.
 
-## 13. Adversarial obligations
+## 13. Domain-closure requirement
+
+The allowed domain used by any independence claim MUST itself be canonical and closed for the relevant semantic question.
+
+The following is insufficient:
+
+```text
+"D is independent for values currently observed"
+```
+
+The specification MUST instead define the admissible domain `Dom(D)` and establish the claim over that domain.
+
+If the domain can be expanded by the executor, environment, token, or downstream artifact without a new canonical governance event, the independence claim is invalid.
+
+A newly admitted domain value that can alter authority-relevant effects invalidates the previous independence claim and requires reclassification/rebinding.
+
+## 14. Adversarial obligations
 
 The specification MUST survive at least these counterexamples:
 
@@ -271,7 +316,31 @@ Many tests observe no effect from a dependency, but the allowed domain contains 
 
 Expected: testing alone does not establish universal `INDEPENDENT` status.
 
-## 14. Governance boundary
+### CED-007 — compositional independence failure
+
+`D1` and `D2` are each classified `INDEPENDENT` under one-at-a-time substitutions, but a joint assignment changes authority-relevant effects.
+
+Expected: individual independence claims fail for the joint context; the interacting dependency set becomes `BOUND` or `UNRESOLVED`.
+
+### CED-008 — mutable-domain expansion
+
+A dependency is `INDEPENDENT` over `Dom(D)`, but the executor or environment silently expands `Dom(D)` to include a value that changes effects.
+
+Expected: expansion is rejected unless introduced by a new canonical governance event; otherwise authorization is `NOT_AUTHORIZED`.
+
+### CED-009 — context transfer
+
+A dependency is proven independent under `(C1,S1)` but the same classification is reused under `(C2,S2)` where it changes effects.
+
+Expected: independence does not transfer across semantic context; the new context requires a fresh proof or binding.
+
+### CED-010 — hidden interaction through excluded set
+
+Multiple dependencies excluded from the closure interact through an unmodeled relation, even though each pairwise single-variable test appears independent.
+
+Expected: the excluded dependency set is not `INDEPENDENT` until joint noninterference is established; otherwise `UNRESOLVED`.
+
+## 15. Governance boundary
 
 This specification defines a criterion and evidence model. It does not itself establish any execution authority.
 
