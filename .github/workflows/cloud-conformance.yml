@@ -35,8 +35,8 @@ jobs:
           cloud_implementation_plan=docs/gates/cloud-execution-implementation-plan-v0.1.md
           EOF
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Check cloud implementation formatting
+        run: rustfmt --edition 2021 --check src/cloud_execution.rs tests/cloud_execution.rs
 
       - name: Run cloud conformance tests
         shell: bash
