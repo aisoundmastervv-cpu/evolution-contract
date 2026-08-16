@@ -14,18 +14,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Verify registered execution arm
         env:
           REGISTRATION_SHA: 358bff2d5be2c0a38822a04f7c3deadaf004c28c
+          REGISTRATION_BLOB_SHA: b6e453dd54de9b548a7e6651a6ce0368db1e4a23
         run: |
           set -euo pipefail
-          git cat-file -e "$REGISTRATION_SHA:H3_EXECUTION_ARM.md"
-          git show "$REGISTRATION_SHA:H3_EXECUTION_ARM.md" | grep -F 'Mapping ID: A2-cgroup-linear-v1'
-          git show "$REGISTRATION_SHA:H3_EXECUTION_ARM.md" | grep -F 'cpu.weight(e) = 100 + floor(9900 * e / 255)'
+          test "$(git hash-object H3_EXECUTION_ARM.md)" = "$REGISTRATION_BLOB_SHA"
           echo "registration_sha=$REGISTRATION_SHA" | tee execution-registration.txt
+          echo "registration_blob_sha=$REGISTRATION_BLOB_SHA" | tee -a execution-registration.txt
 
       - name: Run registered execution arm
         shell: bash
