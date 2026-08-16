@@ -526,6 +526,9 @@ pub struct FitnessWeights {
 }
 
 #[cfg(test)]
+mod g11_harness;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
