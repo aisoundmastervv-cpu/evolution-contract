@@ -1,0 +1,83 @@
+name: A2 Capability Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - a2-capability-probe
+
+permissions:
+  contents: read
+
+jobs:
+  capability-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Capture runner provenance
+        run: |
+          mkdir -p a2-capability-artifact
+          {
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "sha=${GITHUB_SHA}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+            echo "runner_name=${RUNNER_NAME}"
+            echo "kernel=$(uname -a)"
+            echo "rustc=$(rustc --version)"
+          } | tee a2-capability-artifact/provenance.txt
+
+      - name: Capture preflight environment
+        run: |
+          set +e
+          {
+            echo '=== /proc/loadavg ==='; cat /proc/loadavg
+            echo '=== /proc/stat ==='; cat /proc/stat
+            echo '=== /proc/cgroups ==='; cat /proc/cgroups
+            echo '=== /proc/self/cgroup ==='; cat /proc/self/cgroup
+            echo '=== cgroup controllers ==='; cat /sys/fs/cgroup/cgroup.controllers 2>&1
+            echo '=== cgroup subtree_control ==='; cat /sys/fs/cgroup/cgroup.subtree_control 2>&1
+            echo '=== cpu.max ==='; cat /sys/fs/cgroup/cpu.max 2>&1
+            echo '=== cpu.weight ==='; cat /sys/fs/cgroup/cpu.weight 2>&1
+            echo '=== processes ==='; ps -eo pid,ppid,comm,ni,%cpu,psr,args --sort=pid
+            echo '=== cpu frequency ==='; cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>&1
+          } > a2-capability-artifact/environment-before.txt
+
+      - name: Build capability probe
+        run: cargo build --bin a2_capability_probe --release
+
+      - name: Run capability probe
+        run: |
+          set +e
+          sudo ./target/release/a2_capability_probe | tee a2-capability-artifact/capability-report.txt
+          rc=${PIPESTATUS[0]}
+          echo "probe_exit_code=$rc" | tee -a a2-capability-artifact/capability-report.txt
+          exit "$rc"
+
+      - name: Capture post-probe environment
+        if: always()
+        run: |
+          set +e
+          {
+            echo '=== /proc/loadavg ==='; cat /proc/loadavg
+            echo '=== /proc/stat ==='; cat /proc/stat
+            echo '=== /proc/self/cgroup ==='; cat /proc/self/cgroup
+            echo '=== processes ==='; ps -eo pid,ppid,comm,ni,%cpu,psr,args --sort=pid
+          } > a2-capability-artifact/environment-after.txt
+
+      - name: Upload A2 capability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a2-capability-${{ github.run_id }}
+          path: a2-capability-artifact/
+          if-no-files-found: error
+          retention-days: 90
