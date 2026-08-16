@@ -1,0 +1,35 @@
+name: Final validation gate
+
+on:
+  push:
+    branches: [validation/real-two-fix]
+
+permissions:
+  contents: write
+
+jobs:
+  final-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+      - name: cargo check
+        run: cargo check --all-targets
+      - name: cargo test
+        run: cargo test --all-targets -- --nocapture
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Record successful final gate and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/final-validation.yml
+          git add -u
+          git commit -m "Record final validation gate closure"
+          git push
