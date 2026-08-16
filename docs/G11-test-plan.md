@@ -1,10 +1,10 @@
 # G11 — Test Plan
 
-Status: **DRAFT — TEST DESIGN ONLY**
+Status: **ACCEPTED — HARNESS MAY BE IMPLEMENTED**
 
 ## Purpose
 
-Define the positive, negative, and boundary cases for G11 strictly from the frozen semantic baseline. This document does not change the Claim or Oracle and does not authorize production changes or test execution.
+Define the positive, negative, and boundary cases for G11 strictly from the frozen semantic baseline. This document does not change the Claim or Oracle.
 
 ## Frozen inputs
 
@@ -30,7 +30,7 @@ Tests may operationalize the frozen predicates. They may not add new semantic re
 
 ## Traceability matrix
 
-Every semantic test case must map to an already-frozen oracle predicate and an already-frozen Contract v1.0 rule. The matrix is closed: adding a case requires a documented reason that it is needed to operationalize an existing predicate; it may not introduce a new semantic requirement.
+Every semantic test case maps to an already-frozen oracle predicate and an already-frozen Contract v1.0 rule. The matrix is closed: adding a case requires a documented reason that it is needed to operationalize an existing predicate; it may not introduce a new semantic requirement.
 
 | Test | Role | Oracle | Contract v1.0 source | Frozen expected observation |
 |---|---|---|---|---|
@@ -156,14 +156,15 @@ A harness failure, missing evidence, or inability to evaluate a predicate is **N
 
 ## Explicit prohibitions
 
-Before this plan is reviewed and accepted:
-
-- no G11 production changes;
-- no G11 test implementation;
-- no G11 execution;
-- no modification of C1/O1;
-- no addition of semantic requirements derived from current implementation behavior.
+- No G11 production changes are authorized by this document.
+- No G11 execution is authorized by this document.
+- C1/O1 remain immutable.
+- No semantic requirements may be added from current implementation behavior.
 
 ## Review gate
 
-This test plan itself must be reviewed against frozen Contract v1.0 and frozen G11.1 before a test harness is implemented.
+**Review result: ACCEPTED.**
+
+The matrix has been reviewed against frozen Contract v1.0 and frozen G11.1. Every semantic case maps to an existing oracle predicate and contract rule; no case adds a new semantic requirement.
+
+**Authorization:** implementation of the G11 test harness may now begin. Harness implementation must remain mechanically derived from this accepted matrix and may not alter C1/O1.
