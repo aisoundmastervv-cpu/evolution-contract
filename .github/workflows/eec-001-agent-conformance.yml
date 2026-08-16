@@ -1,0 +1,65 @@
+name: EEC-001 Agent Environment Conformance
+
+on:
+  push:
+    branches: ['architecture/eec-001-agent-conformance']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  agent-environment-conformance:
+    name: canonical identity + environment gate
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install reference Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: EEC-001 gate before mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/agent-environment-gate.sh "$EXPECTED_COMMIT" | tee "$RUNNER_TEMP/eec-pre-mutation.txt"
+          grep '^AGENT_ENVIRONMENT: READY$' "$RUNNER_TEMP/eec-pre-mutation.txt"
+
+      - name: Mutation sentinel
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'mutation occurred only after EEC-001 gate passed\n' > "$RUNNER_TEMP/eec-mutation-sentinel.txt"
+          cp "$RUNNER_TEMP/eec-mutation-sentinel.txt" ./eec-mutation-sentinel.txt
+          test -f ./eec-mutation-sentinel.txt
+
+      - name: EEC-001 fail-closed check after mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          bash scripts/agent-environment-gate.sh "$EXPECTED_COMMIT" > "$RUNNER_TEMP/eec-post-mutation.txt" 2>&1
+          STATUS=$?
+          set -e
+          test "$STATUS" -ne 0
+          grep '^AGENT_ENVIRONMENT: NOT_READY$' "$RUNNER_TEMP/eec-post-mutation.txt"
+          grep 'reason=workspace-not-clean' "$RUNNER_TEMP/eec-post-mutation.txt"
+          echo 'EEC-001: PASS'
+
+      - name: Upload EEC-001 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eec-001-agent-environment-evidence-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/eec-pre-mutation.txt
+            ${{ runner.temp }}/eec-post-mutation.txt
+            eec-mutation-sentinel.txt
+          if-no-files-found: error
