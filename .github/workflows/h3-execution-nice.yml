@@ -18,12 +18,14 @@ jobs:
       - name: Verify registered fallback arm
         env:
           REGISTRATION_SHA: 0ff1fc6d6016fa30378061d8f65744ad4902ca16
+          REGISTRATION_BLOB_SHA: 5549ec1640818742f4d1a7e96932852e23b0063d
         run: |
           set -euo pipefail
-          test "$(git hash-object H3_EXECUTION_ARM_NICE.md)" = "$(git rev-parse "$REGISTRATION_SHA:H3_EXECUTION_ARM_NICE.md" 2>/dev/null || true)" && true
+          test "$(git hash-object H3_EXECUTION_ARM_NICE.md)" = "$REGISTRATION_BLOB_SHA"
           grep -F 'Mapping ID: A1-nice-v1' H3_EXECUTION_ARM_NICE.md
           grep -F 'nice(e) = 19 - floor(19 * e / 255)' H3_EXECUTION_ARM_NICE.md
           echo "registration_sha=$REGISTRATION_SHA" | tee execution-registration.txt
+          echo "registration_blob_sha=$REGISTRATION_BLOB_SHA" | tee -a execution-registration.txt
 
       - name: Run registered nice execution arm
         shell: bash
@@ -34,7 +36,8 @@ jobs:
           uname -a > h3-nice-evidence/environment.txt
           python3 --version >> h3-nice-evidence/environment.txt
           nproc >> h3-nice-evidence/environment.txt
-          getconf CLK_TCK >> h3-nice-evidence/environment.txt
+          CLK_TCK=$(getconf CLK_TCK)
+          echo "CLK_TCK=$CLK_TCK" >> h3-nice-evidence/environment.txt
           taskset -pc $$ >> h3-nice-evidence/environment.txt
 
           cpu_usec() {
@@ -93,7 +96,6 @@ jobs:
             echo "$trial,$gene,$intervention_nice,$control_cpu,$intervention_cpu,$ratio,$control_nice_actual,$intervention_nice_actual,$control_status,$intervention_status,$valid" >> h3-nice-evidence/trials.csv
           }
 
-          CLK_TCK=$(getconf CLK_TCK)
           for trial in 1 2 3 4 5; do run_trial "e0-t${trial}" 0 19; done
           for trial in 1 2 3 4 5; do run_trial "e255-t${trial}" 255 0; done
 
