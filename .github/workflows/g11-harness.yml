@@ -38,6 +38,9 @@ jobs:
         run: |
           set -o pipefail
           cargo test --lib g11_harness -- --nocapture 2>&1 | tee g11-evidence/g11-raw.txt
+          TEST_STATUS=${PIPESTATUS[0]}
+          echo "G11_TEST_STATUS=$TEST_STATUS" >> "$GITHUB_ENV"
+          exit "$TEST_STATUS"
 
       - name: Record result
         if: always()
@@ -48,7 +51,7 @@ jobs:
             echo "commit=$GITHUB_SHA"
             echo "workflow_run=$GITHUB_RUN_ID"
             echo "job=$GITHUB_JOB"
-            echo "result=$?"
+            echo "test_status=${G11_TEST_STATUS:-unknown}"
           } | tee g11-evidence/result.txt
 
       - name: Upload raw G11 evidence
