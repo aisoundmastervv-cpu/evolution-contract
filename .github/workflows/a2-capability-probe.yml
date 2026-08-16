@@ -37,18 +37,17 @@ jobs:
 
       - name: Capture preflight environment
         run: |
-          set +e
           {
-            echo '=== /proc/loadavg ==='; cat /proc/loadavg
-            echo '=== /proc/stat ==='; cat /proc/stat
-            echo '=== /proc/cgroups ==='; cat /proc/cgroups
-            echo '=== /proc/self/cgroup ==='; cat /proc/self/cgroup
-            echo '=== cgroup controllers ==='; cat /sys/fs/cgroup/cgroup.controllers 2>&1
-            echo '=== cgroup subtree_control ==='; cat /sys/fs/cgroup/cgroup.subtree_control 2>&1
-            echo '=== cpu.max ==='; cat /sys/fs/cgroup/cpu.max 2>&1
-            echo '=== cpu.weight ==='; cat /sys/fs/cgroup/cpu.weight 2>&1
-            echo '=== processes ==='; ps -eo pid,ppid,comm,ni,%cpu,psr,args --sort=pid
-            echo '=== cpu frequency ==='; cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>&1
+            echo '=== /proc/loadavg ==='; cat /proc/loadavg 2>&1 || true
+            echo '=== /proc/stat ==='; cat /proc/stat 2>&1 || true
+            echo '=== /proc/cgroups ==='; cat /proc/cgroups 2>&1 || true
+            echo '=== /proc/self/cgroup ==='; cat /proc/self/cgroup 2>&1 || true
+            echo '=== cgroup controllers ==='; cat /sys/fs/cgroup/cgroup.controllers 2>&1 || true
+            echo '=== cgroup subtree_control ==='; cat /sys/fs/cgroup/cgroup.subtree_control 2>&1 || true
+            echo '=== cpu.max ==='; cat /sys/fs/cgroup/cpu.max 2>&1 || true
+            echo '=== cpu.weight ==='; cat /sys/fs/cgroup/cpu.weight 2>&1 || true
+            echo '=== processes ==='; ps -eo pid,ppid,comm,ni,%cpu,psr,args --sort=pid 2>&1 || true
+            echo '=== cpu frequency ==='; cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>&1 || true
           } > a2-capability-artifact/environment-before.txt
 
       - name: Build capability probe
@@ -65,12 +64,17 @@ jobs:
       - name: Capture post-probe environment
         if: always()
         run: |
-          set +e
           {
-            echo '=== /proc/loadavg ==='; cat /proc/loadavg
-            echo '=== /proc/stat ==='; cat /proc/stat
-            echo '=== /proc/self/cgroup ==='; cat /proc/self/cgroup
-            echo '=== processes ==='; ps -eo pid,ppid,comm,ni,%cpu,psr,args --sort=pid
+            echo '=== /proc/loadavg ==='; cat /proc/loadavg 2>&1 || true
+            echo '=== /proc/stat ==='; cat /proc/stat 2>&1 || true
+            echo '=== /proc/cgroups ==='; cat /proc/cgroups 2>&1 || true
+            echo '=== /proc/self/cgroup ==='; cat /proc/self/cgroup 2>&1 || true
+            echo '=== cgroup controllers ==='; cat /sys/fs/cgroup/cgroup.controllers 2>&1 || true
+            echo '=== cgroup subtree_control ==='; cat /sys/fs/cgroup/cgroup.subtree_control 2>&1 || true
+            echo '=== cpu.max ==='; cat /sys/fs/cgroup/cpu.max 2>&1 || true
+            echo '=== cpu.weight ==='; cat /sys/fs/cgroup/cpu.weight 2>&1 || true
+            echo '=== processes ==='; ps -eo pid,ppid,comm,ni,%cpu,psr,args --sort=pid 2>&1 || true
+            echo '=== cpu frequency ==='; cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>&1 || true
           } > a2-capability-artifact/environment-after.txt
 
       - name: Upload A2 capability evidence
