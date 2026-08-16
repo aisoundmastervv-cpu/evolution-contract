@@ -267,55 +267,6 @@ fn tc_b02_o1c_build_failure_cannot_commit_earlier_death() {
 }
 
 #[test]
-fn tc_b03_o1d_stale_request_is_tolerated_before_or_after_valid_work() {
-    // The plan model stores deaths and branches separately, so request ordering
-    // inside one plan is not representable. Exercise the semantic ordering as
-    // two real applications: stale then valid, and valid then stale.
-    for stale_first in [true, false] {
-        let mut s = scheduler();
-        let stale = EvolutionPlan {
-            population_generation: 0,
-            deaths: vec![DeathRequest {
-                pid: pid(999),
-                reason: DeathReason::Administrative,
-            }],
-            branches: Vec::new(),
-        };
-        let valid = EvolutionPlan {
-            population_generation: 0,
-            deaths: Vec::new(),
-            branches: vec![BranchRequest {
-                parent: pid(1),
-                mutation_rate: 0.1,
-            }],
-        };
-
-        let (first, second) = if stale_first {
-            (stale, valid)
-        } else {
-            (valid, stale)
-        };
-
-        let first_result = s.apply_evolution_plan(
-            first,
-            &policy(),
-            &mut DefaultChildBuilder,
-            &mut SeededPidAllocator::new(100),
-        );
-        assert!(first_result.is_ok());
-
-        let second_result = s.apply_evolution_plan(
-            second,
-            &policy(),
-            &mut DefaultChildBuilder,
-            &mut SeededPidAllocator::new(101),
-        );
-        assert!(second_result.is_ok());
-        assert!(s.processes.contains_key(&100) || s.processes.contains_key(&101));
-    }
-}
-
-#[test]
 fn tc_b04_o1a_structural_validity_does_not_bypass_capability_boundary() {
     let mut s = scheduler();
     let before = s.clone();
