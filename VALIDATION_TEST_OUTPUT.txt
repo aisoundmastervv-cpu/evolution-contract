@@ -1,0 +1,29 @@
+   Compiling evolution-contract v0.1.0 (/home/runner/work/evolution-contract/evolution-contract)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.21s
+     Running unittests src/lib.rs (target/debug/deps/evolution_contract-1dde87cca7031cf6)
+
+running 10 tests
+test tests::budget_overflow_is_structural ... ok
+test tests::conflicting_request_rejects_whole_plan ... ok
+test tests::evolvable_pid_witness_rejects_protected_and_immune ... ok
+
+thread 'tests::failed_build_commits_nothing' (2577) panicked at src/lib.rs:615:9:
+assertion failed: matches!(err, ApplyError::Build(BuildError::BuilderFailure { ordinal: 7 }))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test tests::duplicate_death_request_is_structural_and_rejects_whole_plan ... ok
+test tests::generation_mismatch_is_structural_rejection ... ok
+test tests::lazy_invalidation_skips_dead_pid ... ok
+test tests::failed_build_commits_nothing ... FAILED
+test tests::per_parent_cap_is_structural ... ok
+test tests::population_floor_rejects_plan ... ok
+test tests::stale_parent_is_partial_apply ... ok
+
+failures:
+
+failures:
+    tests::failed_build_commits_nothing
+
+test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
+TEST_EXIT_CODE=101
