@@ -1,0 +1,57 @@
+name: H3 Runner Validation
+
+on:
+  push:
+    branches: ['h3/execution-arm-registration-v1']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: H3 runner contract validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install reference Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify admitted configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          source config/h3-acp-001.env
+          test "$PROPOSAL_ID" = "H3-ACP-001"
+          test "$ARM_ID" = "H3-OS-NICE-CAUSAL-v0.1"
+          test "$CONTROL_NICE" = "0"
+          test "$TREATMENT_NICE" = "10"
+          test "$REQUIRED_PAIRS" = "10"
+          test "$MIN_POSITIVE_PAIRS" = "9"
+          test "$MEDIAN_RATIO_FLOOR" = "1.10"
+
+      - name: Build and test
+        run: cargo test --all-targets
+
+      - name: Validate H3 runner without executing workload
+        run: cargo run --release --bin h3_runner -- --validate-only --expected-nice 0
+
+      - name: Verify workspace identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_COMMIT="$(git rev-parse HEAD)"
+          remote="$(git remote get-url origin)"
+          contract_sha="$(sha256sum docs/execution/environment-contract-v0.1.md | awk '{print $1}')"
+          bootstrap_sha="$(sha256sum scripts/bootstrap-environment.sh | awk '{print $1}')"
+          rustc_version="$(rustc --version)"
+          cargo_version="$(cargo --version)"
+          identity_input=$(printf '%s\n' "repository=$remote" "commit=$EXPECTED_COMMIT" "environment_contract_sha256=$contract_sha" "bootstrap_sha256=$bootstrap_sha" "rustc=$rustc_version" "cargo=$cargo_version")
+          environment_id="$(printf '%s' "$identity_input" | sha256sum | awk '{print $1}')"
+          EXPECTED_COMMIT="$EXPECTED_COMMIT" EXPECTED_ENVIRONMENT_ID="$environment_id" bash scripts/agent-environment-gate.sh
