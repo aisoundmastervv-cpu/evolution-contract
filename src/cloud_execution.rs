@@ -166,7 +166,9 @@ impl FileExecutionStore {
                 }
                 let record = decode_record(payload)?;
                 previous = hash.to_string();
-                store.executions.insert(record.context.execution.clone(), record);
+                store
+                    .executions
+                    .insert(record.context.execution.clone(), record);
             }
             store.audit_head = previous;
         }
@@ -177,7 +179,10 @@ impl FileExecutionStore {
         let payload = encode_record(&execution);
         let hash = digest(&format!("{}\n{}", self.audit_head, payload));
         let line = format!("{}\t{}\t{}\n", hash, self.audit_head, payload);
-        let mut file = OpenOptions::new().create(true).append(true).open(&self.path)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)?;
         file.write_all(line.as_bytes())?;
         file.sync_all()?;
         self.audit_head = hash.clone();
