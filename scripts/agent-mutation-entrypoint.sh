@@ -33,7 +33,13 @@ fi
 
 cd "$REPO_ROOT"
 
-EXPECTED_COMMIT="$EXPECTED_COMMIT" bash "$REPO_ROOT/scripts/agent-environment-gate.sh"
+if [[ -z "${EXPECTED_ENVIRONMENT_ID:-}" ]]; then
+  echo "EEC-002: NOT_READY" >&2
+  echo "reason=expected-environment-id-required" >&2
+  exit 1
+fi
+
+EXPECTED_COMMIT="$EXPECTED_COMMIT" EXPECTED_ENVIRONMENT_ID="$EXPECTED_ENVIRONMENT_ID" bash "$REPO_ROOT/scripts/agent-environment-gate.sh"
 
 echo "EEC-002: READY"
 echo "mutation-entrypoint=agent-mutation-entrypoint.sh"
