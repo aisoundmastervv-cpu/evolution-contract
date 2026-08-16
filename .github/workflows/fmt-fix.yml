@@ -1,0 +1,28 @@
+name: Format validated branch
+
+on:
+  push:
+    branches: [validation/real-two-fix]
+
+permissions:
+  contents: write
+
+jobs:
+  format-and-cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Format source
+        run: cargo fmt --all
+      - name: Commit formatting and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib.rs
+          rm -f .github/workflows/fmt-fix.yml
+          git add -u
+          git commit -m "Format validated Rust source"
+          git push
