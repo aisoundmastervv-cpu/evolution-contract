@@ -51,12 +51,17 @@ jobs:
           } > a2-capability-artifact/environment-before.txt
 
       - name: Build capability probe
-        run: cargo build --bin a2_capability_probe --release
+        run: |
+          # The probe is deliberately compiled standalone. The repository's
+          # library currently has unrelated compiler errors; capability
+          # discovery must not be coupled to those semantic checks.
+          rustc --edition=2021 src/bin/a2_capability_probe.rs \
+            -o a2-capability-probe
 
       - name: Run capability probe
         run: |
           set +e
-          sudo ./target/release/a2_capability_probe | tee a2-capability-artifact/capability-report.txt
+          sudo ./a2-capability-probe | tee a2-capability-artifact/capability-report.txt
           rc=${PIPESTATUS[0]}
           echo "probe_exit_code=$rc" | tee -a a2-capability-artifact/capability-report.txt
           exit "$rc"
