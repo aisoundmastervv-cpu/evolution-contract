@@ -1,0 +1,148 @@
+name: H3 Registered Execution
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - h3/design-requirements-v1
+
+jobs:
+  h3-execution:
+    name: H3 A2 registered cgroup execution
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify registered execution arm
+        env:
+          REGISTRATION_SHA: 358bff2d5be2c0a38822a04f7c3deadaf004c28c
+        run: |
+          set -euo pipefail
+          git cat-file -e "$REGISTRATION_SHA:H3_EXECUTION_ARM.md"
+          test "$(git show "$REGISTRATION_SHA:H3_EXECUTION_ARM.md" | sha256sum | awk '{print $1}')" = "$(git show "$REGISTRATION_SHA:H3_EXECUTION_ARM.md" | sha256sum | awk '{print $1}')"
+          echo "registration_sha=$REGISTRATION_SHA" | tee execution-registration.txt
+
+      - name: Run registered execution arm
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p h3-evidence
+          echo 'trial,gene,intervention_weight,control_cpu_usec,intervention_cpu_usec,ratio,control_exit,intervention_exit,valid' > h3-evidence/trials.csv
+          echo 'environment:' > h3-evidence/environment.txt
+          uname -a >> h3-evidence/environment.txt
+          python3 --version >> h3-evidence/environment.txt
+          nproc >> h3-evidence/environment.txt
+          taskset -pc $$ >> h3-evidence/environment.txt
+          cat /sys/fs/cgroup/cgroup.controllers >> h3-evidence/environment.txt
+
+          run_trial() {
+            local trial="$1"
+            local gene="$2"
+            local weight="$3"
+            local root="/sys/fs/cgroup/h3-${GITHUB_RUN_ID}-${trial}"
+            local control="$root/control"
+            local intervention="$root/intervention"
+            local control_pid intervention_pid
+            local before_control before_intervention after_control after_intervention
+
+            sudo mkdir "$root" "$control" "$intervention"
+            sudo sh -c "echo +cpu > '$root/subtree_control'"
+            echo "$weight" | sudo tee "$intervention/cpu.weight" >/dev/null
+            echo 100 | sudo tee "$control/cpu.weight" >/dev/null
+
+            taskset -c 0 python3 scripts/h3_cpu_workload.py > "h3-evidence/${trial}-control.out" 2>&1 &
+            control_pid=$!
+            taskset -c 0 python3 scripts/h3_cpu_workload.py > "h3-evidence/${trial}-intervention.out" 2>&1 &
+            intervention_pid=$!
+
+            kill -STOP "$control_pid" "$intervention_pid"
+            echo "$control_pid" | sudo tee "$control/cgroup.procs" >/dev/null
+            echo "$intervention_pid" | sudo tee "$intervention/cgroup.procs" >/dev/null
+
+            echo "trial=$trial gene=$gene intervention_weight=$weight" | tee "h3-evidence/${trial}-config.txt"
+            sudo cat "$control/cpu.weight" >> "h3-evidence/${trial}-config.txt"
+            sudo cat "$intervention/cpu.weight" >> "h3-evidence/${trial}-config.txt"
+            sudo cat "$control/cpu.stat" > "h3-evidence/${trial}-control-before.stat"
+            sudo cat "$intervention/cpu.stat" > "h3-evidence/${trial}-intervention-before.stat"
+
+            before_control=$(awk '$1=="usage_usec" {print $2}' "h3-evidence/${trial}-control-before.stat")
+            before_intervention=$(awk '$1=="usage_usec" {print $2}' "h3-evidence/${trial}-intervention-before.stat")
+
+            kill -CONT "$control_pid" "$intervention_pid"
+            sleep 5
+
+            sudo cat "$control/cpu.stat" > "h3-evidence/${trial}-control-after.stat"
+            sudo cat "$intervention/cpu.stat" > "h3-evidence/${trial}-intervention-after.stat"
+            after_control=$(awk '$1=="usage_usec" {print $2}' "h3-evidence/${trial}-control-after.stat")
+            after_intervention=$(awk '$1=="usage_usec" {print $2}' "h3-evidence/${trial}-intervention-after.stat")
+
+            kill -TERM "$control_pid" "$intervention_pid" || true
+            wait "$control_pid" || control_status=$?
+            wait "$intervention_pid" || intervention_status=$?
+            control_status=${control_status:-0}
+            intervention_status=${intervention_status:-0}
+
+            local control_cpu=$((after_control-before_control))
+            local intervention_cpu=$((after_intervention-before_intervention))
+            local ratio
+            ratio=$(python3 - "$intervention_cpu" "$control_cpu" <<'PY'
+import sys
+x = int(sys.argv[1])
+y = int(sys.argv[2])
+print("inf" if y == 0 else f"{x/y:.6f}")
+PY
+)
+
+            local valid=true
+            [[ "$control_status" == "0" ]] || valid=false
+            [[ "$intervention_status" == "0" ]] || valid=false
+            [[ "$control_cpu" -gt 0 ]] || valid=false
+            [[ "$intervention_cpu" -gt 0 ]] || valid=false
+            echo "$trial,$gene,$weight,$control_cpu,$intervention_cpu,$ratio,$control_status,$intervention_status,$valid" >> h3-evidence/trials.csv
+
+            sudo rmdir "$control" "$intervention" "$root"
+          }
+
+          for trial in 1 2 3 4 5; do run_trial "e0-t${trial}" 0 100; done
+          for trial in 1 2 3 4 5; do run_trial "e255-t${trial}" 255 10000; done
+
+          python3 - <<'PY'
+import csv
+from statistics import median
+
+rows = list(csv.DictReader(open('h3-evidence/trials.csv')))
+e0 = [float(r['ratio']) for r in rows if r['gene'] == '0' and r['valid'] == 'true']
+e255 = [float(r['ratio']) for r in rows if r['gene'] == '255' and r['valid'] == 'true']
+
+outcome = 'INCONCLUSIVE'
+reason = 'insufficient valid trials'
+if len(e0) == 5 and len(e255) == 5:
+    m0 = median(e0)
+    m255 = median(e255)
+    if 0.5 <= m0 <= 2.0 and m255 >= 2.0 * m0:
+        outcome = 'CAUSAL SUPPORT'
+        reason = 'registered effect criterion satisfied'
+    else:
+        outcome = 'NULL-FALSIFICATION'
+        reason = 'registered effect criterion not satisfied'
+else:
+    m0 = median(e0) if e0 else None
+    m255 = median(e255) if e255 else None
+
+with open('h3-evidence/summary.txt', 'w') as f:
+    f.write(f'outcome={outcome}\n')
+    f.write(f'reason={reason}\n')
+    f.write(f'median_ratio_e0={m0}\n')
+    f.write(f'median_ratio_e255={m255}\n')
+    f.write('registration_sha=358bff2d5be2c0a38822a04f7c3deadaf004c28c\n')
+PY
+
+      - name: Upload H3 execution evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-execution-evidence
+          path: |
+            execution-registration.txt
+            h3-evidence/
