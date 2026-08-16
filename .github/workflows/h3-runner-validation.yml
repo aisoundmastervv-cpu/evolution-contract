@@ -59,6 +59,6 @@ jobs:
           bootstrap_sha="$(sha256sum scripts/bootstrap-environment.sh | awk '{print $1}')"
           rustc_version="$(rustc --version)"
           cargo_version="$(cargo --version)"
-          identity_input=$(printf '%s\n' "repository=$remote" "commit=$EXPECTED_COMMIT" "environment_contract_sha256=$contract_sha" "bootstrap_sha=$bootstrap_sha" "rustc=$rustc_version" "cargo=$cargo_version")
+          identity_input=$(printf '%s\n' "repository=$remote" "commit=$EXPECTED_COMMIT" "environment_contract_sha256=$contract_sha" "bootstrap_sha256=$bootstrap_sha" "rustc=$rustc_version" "cargo=$cargo_version")
           environment_id="$(printf '%s' "$identity_input" | sha256sum | awk '{print $1}')"
           EXPECTED_COMMIT="$EXPECTED_COMMIT" EXPECTED_ENVIRONMENT_ID="$environment_id" bash scripts/agent-environment-gate.sh
