@@ -16,6 +16,7 @@ For every derived authorization artifact `C` and its parent canonical authority 
 ```text
 AUTHORIZED(C) =>
     VALID(P)
+    AND VALID_EXECUTOR_SEMANTICS(C)
     AND EFFECTS(C) subset_of EFFECTS(P)
     AND CAPABILITY(C) subset_of CAPABILITY(P)
     AND OBJECT(C) = OBJECT(P)
@@ -37,6 +38,7 @@ renew authority
 replace authority
 reinterpret authority
 change the parent object/revision
+change the executor semantics under which effects are evaluated
 ```
 
 Any broader authority requires a new canonical governance event at the appropriate authority domain.
@@ -98,16 +100,78 @@ TOKEN_EXEC_COUNT    <= AUTHORIZED_EXEC_COUNT
 
 A token/child that preserves identifiers but broadens any capability dimension is invalid.
 
-## 4. Semantic effects and composition closure
+## 4. Canonical Executor Semantics / Effect Model
+
+`EFFECTS(X)` is not determined by the capability vector alone. The same vector can have different effective authority under different executor semantics.
+
+Therefore every authority-bearing execution context MUST bind to an exact canonical Executor Semantics / Effect Model revision:
+
+```text
+executor_semantics_id
+executor_semantics_revision
+executor_semantics_hash
+effect_model_id
+effect_model_revision
+effect_model_hash
+```
+
+These identities MUST be part of the canonical authorization lineage and MUST be immutable for the authorized execution.
+
+The executor MUST evaluate effects only under the exact semantics/effect-model revision bound by the authorization. A runtime or executor MAY NOT silently substitute a different semantics revision.
+
+### 4.1 Counterexample closed by this requirement
+
+Consider the same capability vector:
+
+```text
+network = LOCAL_ONLY
+inputs = D1
+persistence = NONE
+```
+
+Under executor semantics `E1`, `LOCAL_ONLY` may permit access only to an unprivileged local service.
+
+Under executor semantics `E2`, the same `LOCAL_ONLY` primitive may resolve to a privileged host control socket or another security-sensitive local endpoint.
+
+The capability vector is identical, but:
+
+```text
+EFFECTS(vector, E1) != EFFECTS(vector, E2)
+```
+
+Therefore a capability vector without an exact executor-semantics binding cannot establish a unique effect set and MUST NOT be treated as sufficient authorization evidence.
+
+### 4.2 Semantic determinacy invariant
+
+For a fixed canonical semantics revision `S`:
+
+```text
+CAPABILITY = C
+EXECUTOR_SEMANTICS = S
+        =>
+EFFECTS(C,S) is uniquely defined by the normative effect model
+```
+
+If two executions can legitimately produce different effect sets while claiming the same `(CAPABILITY, EXECUTOR_SEMANTICS)` pair, the effect model is under-specified and the authority model is not closed.
+
+A semantics change that can alter authority-relevant effects requires a new canonical executor-semantics/effect-model revision and a new applicable governance event.
+
+## 5. Semantic effects and composition closure
 
 Dimension-wise containment is necessary but not sufficient. A combination of individually permitted dimensions MUST NOT create an effect that is absent from the parent authority.
 
-`EFFECTS(X)` is the closed, machine-evaluable set of security-relevant and authority-relevant effects that execution of `X` can cause or obtain under the applicable executor semantics.
+`EFFECTS(X,S)` is the closed, machine-evaluable set of security-relevant and authority-relevant effects that execution of `X` can cause or obtain under exact executor semantics `S`.
 
 For every valid child:
 
 ```text
-EFFECTS(C) subset_of EFFECTS(P)
+EFFECTS(C,S_C) subset_of EFFECTS(P,S_P)
+```
+
+and, unless a new canonical governance event explicitly authorizes a changed semantics boundary:
+
+```text
+S_C = S_P
 ```
 
 The effect relation MUST account for composition across dimensions. In particular, the evaluator MUST consider interactions such as:
@@ -125,7 +189,7 @@ A child is invalid if the combination of individually contained dimensions enabl
 
 Therefore, checking each dimension independently is not sufficient to establish monotonicity.
 
-## 5. Semantic aliasing closure
+## 6. Semantic aliasing closure
 
 Different representations MUST be normalized to the same semantic capability before containment is evaluated.
 
@@ -152,7 +216,7 @@ when the former necessarily grants the latter under the executor semantics.
 
 The normalization function is part of the closed authority domain. A child cannot choose a representation whose semantics are stronger than the represented capability.
 
-## 6. Monotonic authority flow
+## 7. Monotonic authority flow
 
 The normative direction is:
 
@@ -187,7 +251,7 @@ Evidence flows upward through append-only observation and independent evaluation
 
 Neither flow may cross the other's authority boundary.
 
-## 7. Token non-amplification
+## 8. Token non-amplification
 
 A future `AuthorizedExecutionToken` is a proof/reference derived from an already valid canonical `EXECUTION_AUTHORIZED` event. It is not an independent source of authority.
 
@@ -195,20 +259,24 @@ The token MUST satisfy both:
 
 ```text
 CAPABILITY(TOKEN) subset_of CAPABILITY(AUTHORIZATION)
-EFFECTS(TOKEN) subset_of EFFECTS(AUTHORIZATION)
+EFFECTS(TOKEN,S_TOKEN) subset_of EFFECTS(AUTHORIZATION,S_AUTHORIZATION)
+S_TOKEN = S_AUTHORIZATION
 ```
 
-The token MUST NOT introduce a new contract, plan, baseline, oracle, executor specification, environment, input, resource boundary, side effect, network permission, persistence permission, delegation right, or execution count outside the parent authorization.
+unless a separately authorized semantics transition explicitly governs the change.
+
+The token MUST NOT introduce a new contract, plan, baseline, oracle, executor specification, executor semantics, effect model, environment, input, resource boundary, side effect, network permission, persistence permission, delegation right, or execution count outside the parent authorization.
 
 A token that cannot demonstrate these bindings is invalid.
 
-## 8. Non-escalation across layers
+## 9. Non-escalation across layers
 
 For every authority-bearing transition:
 
 ```text
 child_capability subset_of parent_capability
 child_effects   subset_of parent_effects
+child_semantics = parent_semantics
 ```
 
 In particular:
@@ -230,7 +298,7 @@ Verdict
     cannot retroactively create Authorization
 ```
 
-## 9. No implicit authority inheritance
+## 10. No implicit authority inheritance
 
 Authority does not propagate merely because two artifacts share:
 
@@ -245,7 +313,7 @@ Authority does not propagate merely because two artifacts share:
 
 Propagation requires an explicit canonical parent relation and a valid bounded derivation.
 
-## 10. Required executor rejection conditions
+## 11. Required executor rejection conditions
 
 The executor MUST reject a derived authorization artifact if any of the following holds:
 
@@ -256,6 +324,11 @@ new capability dimension introduced
 semantic effect broadened
 capability composition creates a new effect
 semantic aliasing hides a broader capability
+executor semantics missing
+executor semantics mismatch
+executor semantics revision substituted
+missing effect model
+semantic effect model under-specified
 scope broadened
 validity broadened
 object changed
@@ -274,7 +347,7 @@ NOT_AUTHORIZED
 
 The executor must not infer authorization from operational success, artifact existence, or subject claims.
 
-## 11. Governance test obligations
+## 12. Governance test obligations
 
 The following adversarial cases must remain false:
 
@@ -350,7 +423,19 @@ A child passes all identity and dimension checks but its derived semantic effect
 
 Expected: `NOT_AUTHORIZED`.
 
-## 12. Status boundary
+### AUTH-MONO-013 — executor-semantics substitution
+
+The child preserves the same capability vector but is evaluated under a different executor-semantics/effect-model revision whose effective effects are broader.
+
+Expected: `NOT_AUTHORIZED`.
+
+### AUTH-MONO-014 — semantic nondeterminacy
+
+Two executions claim the same capability vector and exact semantics revision but the normative effect model permits different authority-relevant effect sets.
+
+Expected: `NOT_AUTHORIZED` until the effect model is made deterministic and canonical.
+
+## 13. Status boundary
 
 ```text
 DESIGN STATUS: DRAFT
