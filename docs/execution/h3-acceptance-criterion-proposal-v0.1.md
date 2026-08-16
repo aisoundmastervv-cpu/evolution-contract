@@ -3,18 +3,20 @@
 ## Proposal identity
 
 - Proposal ID: `H3-ACP-001`
-- Status: **CANDIDATE — NOT ADMITTED**
+- Status: **ADMITTED**
 - Proposal type: new normative acceptance criterion
 - Scope: `H3-OS-NICE-CAUSAL-v0.1`
 - Basis commit: `ebf805523806720f090f76a818f924051ad58cf3`
 - Execution arm registration: `H3-OS-NICE-CAUSAL-v0.1`
 - H2 status: **FROZEN**
+- Admission decision: **ADMIT**
+- Admission commit: this commit SHA
 
-This document is a **new methodological proposal**. It is not recovered historical policy and MUST NOT be represented as if it existed in canonical history.
+This document is a **new methodological requirement**. It is not recovered historical policy and MUST NOT be represented as if it existed in canonical history before its admission.
 
 ## Historical status
 
-A canonical-history audit did not establish a pre-existing H3 acceptance threshold. A numerical criterion appearing in the non-canonical PR #8 lineage was explicitly excluded from normative recovery. Therefore this proposal starts a new admission path rather than retroactively importing that criterion.
+A canonical-history audit did not establish a pre-existing H3 acceptance threshold. A numerical criterion appearing in the non-canonical PR #8 lineage was explicitly excluded from normative recovery. Therefore this criterion enters force only from its explicit admission onward.
 
 ## 1. Primary observable
 
@@ -32,9 +34,7 @@ Interpretation:
 
 Process CPU time and user/system CPU time remain secondary observables for diagnosing whether a runtime difference is consistent with scheduler intervention. They are not substitutes for the primary acceptance observable.
 
-## 2. Proposed minimum effect
-
-### Criterion
+## 2. Normative minimum effect
 
 The H3 causal criterion is satisfied only if all of the following hold:
 
@@ -46,15 +46,15 @@ In other words, the treatment must produce a reproducible direction of effect an
 
 ### Rationale for 10 paired trials
 
-Ten paired trials are proposed as the minimum practical sample for this first execution arm because the comparison is within-workload and paired: each treatment observation has a directly corresponding control observation. This reduces the nuisance variation introduced by unrelated workload differences while retaining a manageable execution budget.
+Ten paired trials are the registered minimum practical sample for this first execution arm because the comparison is within-workload and paired: each treatment observation has a directly corresponding control observation. This reduces nuisance variation introduced by unrelated workload differences while retaining a bounded execution budget.
 
-The requirement that 9/10 pairs move in the same direction is deliberately stricter than simply requiring a positive median. Under a null model in which direction is equally likely, 9 or 10 positive pairs has a one-sided sign-test probability of approximately 0.0107. This gives the direction-of-effect requirement a pre-registered statistical meaning without relying on a fragile parametric distributional assumption.
+The requirement that 9/10 pairs move in the same direction is stricter than simply requiring a positive median. Under a null model in which direction is equally likely, 9 or 10 positive pairs has a one-sided sign-test probability of approximately 0.0107. This gives the direction-of-effect requirement a pre-registered statistical meaning without relying on a fragile parametric distributional assumption.
 
 ### Rationale for the 10% effect floor
 
-A criterion of `1.10` is proposed as a practical-effect floor rather than as a claim about universal CPU scheduling behavior. A smaller observed change can be dominated by ordinary runner scheduling noise and timer variation. Requiring at least a 10% median change makes the acceptance condition distinguish a practically meaningful shift from a near-zero perturbation.
+A criterion of `1.10` is a practical-effect floor rather than a claim about universal CPU scheduling behavior. A smaller observed change can be dominated by ordinary runner scheduling noise and timer variation. Requiring at least a 10% median change makes the acceptance condition distinguish a practically meaningful shift from a near-zero perturbation.
 
-The 10% value is therefore a **proposal parameter**, not an experimentally discovered constant and not a recovered historical requirement.
+The 10% value is therefore a **new registered proposal parameter**, not an experimentally discovered constant and not a recovered historical requirement.
 
 ## 3. Repeatability and noise rules
 
@@ -131,7 +131,7 @@ Use only when workflow/runner infrastructure prevents the experiment from materi
 
 ## 6. Anti-post-hoc rules
 
-Once admitted, the following MUST NOT be changed after seeing H3 results:
+After admission, the following MUST NOT be changed after seeing H3 results:
 
 - number of required pairs;
 - 9/10 directional requirement;
@@ -143,28 +143,18 @@ Once admitted, the following MUST NOT be changed after seeing H3 results:
 
 Any change requires a new Proposal ID and a new admission cycle. Existing results MUST NOT be used to justify retroactive threshold selection.
 
-## 7. Admission boundary
+## 7. Admission record
 
-This proposal is **not yet an execution authorization**.
+This criterion is now **ADMITTED** as `H3-ACP-001`.
 
-Admission requires:
+Admission means the numerical parameters are normative constraints for `H3-OS-NICE-CAUSAL-v0.1` and may now be consumed by the H3 workload runner. The runner MUST consume them as contract/configuration data rather than silently embedding a different threshold.
 
-1. canonical review of this proposal;
-2. confirmation that the numerical parameters are intentional and acceptable;
-3. explicit registration of `H3-ACP-001` as an admitted criterion;
-4. recording the admission commit SHA;
-5. only then may the H3 workload runner encode the criterion.
+Admission does **not** constitute H3 execution, H3 evidence, or causal support.
 
-The runner MUST consume the admitted criterion as configuration/contract data rather than embedding a newly invented threshold in implementation code.
+## 8. Decision
 
-## 8. Decision requested
+`H3-ACP-001 = ADMITTED`
 
-Requested governance decision:
+`H3 RUN = NOT EXECUTED`
 
-`ADMIT H3-ACP-001` or `REJECT / REVISE H3-ACP-001`.
-
-Until admission:
-
-- H3 causal execution remains blocked;
-- no H3 runner is authorized to encode these numerical thresholds;
-- no H3 causal evidence exists.
+`H3 CAUSAL EVIDENCE = NONE`
