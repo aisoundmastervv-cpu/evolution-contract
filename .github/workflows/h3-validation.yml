@@ -1,0 +1,31 @@
+name: H3 Implementation Validation
+
+on:
+  push:
+    branches:
+      - h3/design-requirements-v1
+      - 'h3/**'
+  pull_request:
+    branches:
+      - architecture/continuity-gates-v1
+      - main
+
+jobs:
+  h3-validation:
+    name: H3 cargo check + targeted tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo check --all-targets
+        run: cargo check --all-targets
+
+      - name: cargo test -- H3
+        run: cargo test h3_execution -- --nocapture
