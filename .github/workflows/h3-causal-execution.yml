@@ -1,0 +1,190 @@
+name: H3 Causal Execution
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  h3-causal-execution:
+    name: H3-OS-NICE-CAUSAL-v0.1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact execution revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install reference Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Establish environment identity and authorization boundary
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          source config/h3-acp-001.env
+          test "$PROPOSAL_ID" = "H3-ACP-001"
+          test "$ARM_ID" = "H3-OS-NICE-CAUSAL-v0.1"
+          test "$CONTROL_NICE" = "0"
+          test "$TREATMENT_NICE" = "10"
+          test "$REQUIRED_PAIRS" = "10"
+          test "$MIN_POSITIVE_PAIRS" = "9"
+          test "$MEDIAN_RATIO_FLOOR" = "1.10"
+
+          expected_commit="$(git rev-parse HEAD)"
+          test -z "$(git status --porcelain)"
+          remote="$(git remote get-url origin)"
+          contract_sha="$(sha256sum docs/execution/environment-contract-v0.1.md | awk '{print $1}')"
+          bootstrap_sha="$(sha256sum scripts/bootstrap-environment.sh | awk '{print $1}')"
+          rustc_version="$(rustc --version)"
+          cargo_version="$(cargo --version)"
+          identity_input=$(printf '%s\n' "repository=$remote" "commit=$expected_commit" "environment_contract_sha256=$contract_sha" "bootstrap_sha=$bootstrap_sha" "rustc=$rustc_version" "cargo=$cargo_version")
+          environment_id="$(printf '%s' "$identity_input" | sha256sum | awk '{print $1}')"
+          EXPECTED_COMMIT="$expected_commit" EXPECTED_ENVIRONMENT_ID="$environment_id" bash scripts/agent-environment-gate.sh
+          echo "environment_id=$environment_id" >> "$GITHUB_OUTPUT"
+          echo "execution_commit=$expected_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Compile H3 runner in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --edition=2021 src/bin/h3_runner.rs -O -o "$RUNNER_TEMP/h3_runner"
+          "$RUNNER_TEMP/h3_runner" --validate-only --expected-nice 0
+          "$RUNNER_TEMP/h3_runner" --validate-only --expected-nice 10
+
+      - name: Execute 10 registered paired trials
+        shell: bash
+        env:
+          ENVIRONMENT_ID: ${{ steps.identity.outputs.environment_id }}
+          EXECUTION_COMMIT: ${{ steps.identity.outputs.execution_commit }}
+        run: |
+          set -u
+          source config/h3-acp-001.env
+          mkdir -p "$RUNNER_TEMP/h3-evidence"
+          binary="$RUNNER_TEMP/h3_runner"
+          evidence="$RUNNER_TEMP/h3-evidence"
+
+          for i in $(seq 1 "$REQUIRED_PAIRS"); do
+            if (( i % 2 == 1 )); then
+              first_role=control
+              second_role=treatment
+            else
+              first_role=treatment
+              second_role=control
+            fi
+
+            for role in "$first_role" "$second_role"; do
+              if [[ "$role" = control ]]; then nice_value="$CONTROL_NICE"; else nice_value="$TREATMENT_NICE"; fi
+              output="$evidence/trial-${i}-${role}.json"
+              set +e
+              nice -n "$nice_value" "$binary" \
+                --trial-id "pair-${i}" \
+                --role "$role" \
+                --expected-nice "$nice_value" \
+                --environment-id "$ENVIRONMENT_ID" \
+                --workload-revision "$WORKLOAD_REVISION" \
+                --arm-id "$ARM_ID" \
+                --work-units "$WORK_UNITS" > "$output"
+              rc=$?
+              set -e
+              printf '{"trial_id":"pair-%s","role":"%s","launcher_exit":%s,"execution_commit":"%s"}\n' "$i" "$role" "$rc" "$EXECUTION_COMMIT" > "$evidence/trial-${i}-${role}.status.json"
+            done
+          done
+
+      - name: Evaluate registered acceptance criterion
+        shell: python
+        env:
+          ENVIRONMENT_ID: ${{ steps.identity.outputs.environment_id }}
+          EXECUTION_COMMIT: ${{ steps.identity.outputs.execution_commit }}
+        run: |
+          import hashlib, json, os, statistics
+          from pathlib import Path
+
+          def load_config(path):
+              values = {}
+              for line in path.read_text().splitlines():
+                  line = line.strip()
+                  if line and not line.startswith('#') and '=' in line:
+                      key, value = line.split('=', 1)
+                      values[key] = value
+              return values
+
+          evidence = Path(os.environ["RUNNER_TEMP"]) / "h3-evidence"
+          config_path = Path("config/h3-acp-001.env")
+          cfg = load_config(config_path)
+          config_sha = hashlib.sha256(config_path.read_bytes()).hexdigest()
+          required_pairs = int(cfg["REQUIRED_PAIRS"])
+          min_positive = int(cfg["MIN_POSITIVE_PAIRS"])
+          floor = float(cfg["MEDIAN_RATIO_FLOOR"])
+          control_nice = int(cfg["CONTROL_NICE"])
+          treatment_nice = int(cfg["TREATMENT_NICE"])
+          pairs, invalid = [], []
+
+          for i in range(1, required_pairs + 1):
+              records = {}
+              for role in ("control", "treatment"):
+                  path = evidence / f"trial-{i}-{role}.json"
+                  status_path = evidence / f"trial-{i}-{role}.status.json"
+                  try:
+                      status = json.loads(status_path.read_text())
+                      record = json.loads(path.read_text())
+                      if status["launcher_exit"] != 0:
+                          raise ValueError("launcher failure")
+                      records[role] = record
+                  except Exception as exc:
+                      invalid.append(f"pair-{i}/{role}: {exc}")
+              if len(records) != 2:
+                  continue
+              c, t = records["control"], records["treatment"]
+              checks = [
+                  c["observed_nice"] == control_nice,
+                  t["observed_nice"] == treatment_nice,
+                  c["environment_id"] == os.environ["ENVIRONMENT_ID"],
+                  t["environment_id"] == os.environ["ENVIRONMENT_ID"],
+                  c["commit"] == os.environ["EXECUTION_COMMIT"],
+                  t["commit"] == os.environ["EXECUTION_COMMIT"],
+                  c["workload_revision"] == t["workload_revision"],
+                  c["work_units"] == t["work_units"],
+                  c["checksum"] == t["checksum"],
+                  c["wall_ms"] > 0 and t["wall_ms"] > 0,
+              ]
+              if all(checks):
+                  pairs.append({"pair": i, "control_ms": c["wall_ms"], "treatment_ms": t["wall_ms"], "ratio": t["wall_ms"] / c["wall_ms"]})
+              else:
+                  invalid.append(f"pair-{i}: provenance or workload mismatch")
+
+          result = {
+              "schema": "h3-verdict-v0.1",
+              "proposal_id": cfg["PROPOSAL_ID"],
+              "arm_id": cfg["ARM_ID"],
+              "environment_id": os.environ["ENVIRONMENT_ID"],
+              "execution_commit": os.environ["EXECUTION_COMMIT"],
+              "config_sha256": config_sha,
+              "valid_pairs": len(pairs),
+              "invalid": invalid,
+              "pairs": pairs,
+          }
+          if invalid or len(pairs) < required_pairs:
+              result["verdict"] = "INVALID / NON-EVIDENTIARY" if invalid else "INCONCLUSIVE / INSUFFICIENT EVIDENCE"
+          else:
+              ratios = [p["ratio"] for p in pairs]
+              positive = sum(r > 1.0 for r in ratios)
+              median_ratio = statistics.median(ratios)
+              result.update(positive_pairs=positive, median_ratio=median_ratio)
+              result["verdict"] = "PASS — causal support" if positive >= min_positive and median_ratio >= floor else "INCONCLUSIVE"
+
+          (evidence / "h3-verdict.json").write_text(json.dumps(result, indent=2) + "\n")
+          print(json.dumps(result, indent=2))
+          if result["verdict"] != "PASS — causal support":
+              raise SystemExit(1)
+
+      - name: Upload raw H3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-os-nice-causal-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/h3-evidence
+          if-no-files-found: error
