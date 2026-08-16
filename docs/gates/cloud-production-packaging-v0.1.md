@@ -1,6 +1,6 @@
 # Cloud Production Packaging v0.1
 
-**Status:** DEFINED / IMPLEMENTATION PENDING  
+**Status:** EVIDENCE COLLECTED / PROVIDER AND ENVIRONMENT PENDING  
 **Production deployment authorization:** NOT GRANTED
 
 ## 1. Purpose
@@ -9,162 +9,160 @@ This record defines the production packaging boundary required to turn the appro
 
 It does not select a cloud provider, create a production environment, authorize deployment, or claim production readiness.
 
-## 2. Problem being resolved
+## 2. Production execution unit
 
-The current cloud implementation is a provider-neutral reference/conformance substrate. Its implementation plan explicitly excludes provider selection, cloud accounts, orchestration, and production deployment.
+The production execution unit is now concretely defined as the executable produced by the declared Rust binary entrypoint:
 
-The current conformance workflow executes a test binary on a GitHub Actions runner and produces conformance evidence. That execution environment and evidence artifact are not production deployment artifacts.
+```text
+src/bin/cloud_runtime.rs
+```
 
-Therefore a distinct production packaging layer is required before a Deployment Candidate can be fully identified.
+The runtime is an operational adapter around the approved validation executor. It decodes a bounded runtime request, invokes the approved executor through the cloud execution adapter, and persists the resulting execution attempt through the durable `FileExecutionStore`.
 
-## 3. Production execution unit
+It does not define new semantic state-machine rules.
 
-The production execution unit MUST be explicitly defined before production deployment authorization.
+## 3. Packaging contract
 
-For this project, the initial packaging target is defined as:
-
-> **A reproducible, immutable build artifact containing the approved cloud execution implementation and its explicitly declared production runtime entrypoint, together with the exact metadata required to reconstruct and verify that artifact.**
-
-The runtime entrypoint is currently **PENDING** because the repository currently exposes a Rust library crate rather than a declared production service/binary entrypoint.
-
-No test binary, conformance harness, GitHub Actions job, or local/reference provider is implicitly promoted to production execution status.
-
-## 4. Packaging contract
-
-A production packaging implementation MUST establish:
+The production packaging implementation establishes:
 
 1. exact source revision;
 2. declared production entrypoint;
-3. reproducible build procedure;
+3. reproducible release build procedure;
 4. immutable artifact identity;
 5. artifact SHA-256 digest;
-6. build provenance sufficient to reconstruct the artifact;
-7. declared runtime dependencies;
-8. declared configuration boundary;
-9. declared runtime interface;
-10. separation from conformance-only tooling.
+6. build provenance;
+7. runtime execution contract;
+8. configuration boundary;
+9. separation from conformance-only tooling.
 
-## 5. Current repository boundary
+## 4. Verified source and artifact
 
-The repository currently defines `evolution-contract` as a Rust library crate with `src/lib.rs` as its library path.
-
-The existing cloud conformance workflow compiles `src/cloud_execution.rs` as a test binary using `rustc --edition 2021 --test` and executes that binary for conformance evidence.
-
-These facts establish the current implementation boundary but do not establish a production execution unit.
-
-## 6. Required production entrypoint
-
-Before an artifact can become a Deployment Candidate, the implementation MUST identify exactly one production execution contract for the candidate, or explicitly define a bounded set of entrypoints if the architecture requires more than one process.
-
-The entrypoint MUST be:
-
-- version-controlled;
-- reproducibly buildable;
-- independently identifiable;
-- distinguishable from test/conformance entrypoints;
-- compatible with the approved cloud architecture;
-- operationally invocable without changing semantic authority.
-
-Current status:
+The production packaging evidence was obtained from GitHub Actions run:
 
 ```text
-Production entrypoint: PENDING
+31922170829
 ```
 
-## 7. Build method
-
-The production build method MUST be deterministic or otherwise reproducible to the extent required to verify that the artifact corresponds to the declared source revision.
-
-At minimum, the build record MUST identify:
+The exact source revision used by that run was:
 
 ```text
-Source revision:       PENDING
-Toolchain identity:    PENDING
-Build command:         PENDING
-Build inputs:          PENDING
-Artifact path/type:    PENDING
-Artifact SHA-256:      PENDING
+e9a2fcb8b2b5c35ace09828e5e865af5e1d48de3
 ```
 
-The existing conformance command:
+The build command was:
 
 ```text
-rustc --edition 2021 --test src/cloud_execution.rs
+cargo build --release --bin cloud_runtime
 ```
 
-MUST NOT be treated as the production build command merely because it produces an executable.
-
-## 8. Artifact identity
-
-A production artifact MUST be immutable and independently verifiable.
-
-The candidate MUST record at least:
+The resulting executable was:
 
 ```text
-Artifact name:         PENDING
-Artifact type:         PENDING
-Artifact version:      PENDING
-Artifact SHA-256:      PENDING
-Source revision:       PENDING
-Build provenance:      PENDING
+cloud_runtime
 ```
 
-A mutable branch, workflow run, runner workspace, or source tree is not an immutable artifact identity.
+with SHA-256:
 
-## 9. Configuration boundary
+```text
+be5923f34e905bb8c09ad12fa89545f3c9c5a9ddffe817f53db25b9337accc71
+```
 
-Production configuration MUST be separated from the artifact unless configuration is intentionally compiled into the artifact and explicitly included in its identity.
+The corresponding GitHub Actions evidence artifact is:
 
-The packaging contract MUST identify:
+```text
+cloud-conformance-v0-1-evidence-e9a2fcb8b2b5c35ace09828e5e865af5e1d48de3
+```
 
-- required runtime configuration;
-- configuration schema/version;
-- configuration digest mechanism;
-- secrets boundary;
-- provider configuration boundary;
-- operational defaults.
+Artifact ID:
 
-Configuration MUST NOT silently change semantic Contract, State Model, executor, verdict, or predicate behavior.
+```text
+9256683274
+```
 
-## 10. Conformance boundary
+Evidence archive SHA-256:
 
-Conformance tooling remains separate from production packaging.
+```text
+d9d07b1c9866bd90813dc5975aba747721ddf192af7efdc637818ed92b7d7201
+```
 
-The following are evidence mechanisms, not production packaging inputs unless explicitly reclassified by a later approved decision:
+The executable digest and evidence-archive digest are distinct identities and MUST NOT be conflated.
 
-- GitHub Actions conformance runner;
-- conformance test binary;
-- raw test output;
-- conformance evidence archive;
-- formatter/trigger mechanisms used solely to obtain evidence.
+## 5. Runtime execution evidence
 
-The production artifact MUST NOT depend on temporary evidence-generation mechanisms.
+The exact built executable was executed by the same packaging workflow.
 
-## 11. Provider boundary
+The smoke test invoked:
+
+```text
+--execution-id packaging-smoke
+--transition observation-unavailable
+--journal cloud-evidence/runtime-smoke.journal
+```
+
+The same journal was then reopened and used for a second execution.
+
+Recorded output:
+
+```text
+execution=packaging-smoke attempt=1 outcome=completed
+execution=packaging-smoke attempt=2 outcome=completed
+```
+
+The resulting journal contained two linked records with chained audit heads, establishing that the packaged executable can invoke the approved executor adapter and persist operational execution state.
+
+## 6. Conformance boundary
+
+The same workflow also executed the cloud substrate conformance tests successfully.
+
+Packaging evidence and conformance evidence remain distinct claims:
+
+```text
+production artifact build + runtime smoke
+                    ≠
+cloud substrate conformance
+```
+
+Both were executed in the same run, but neither is treated as production authorization.
+
+## 7. Configuration boundary
+
+The smoke-test invocation establishes an operational runtime interface, but it does not establish the final production configuration.
+
+The following remain unresolved:
+
+```text
+Production configuration identity: PENDING
+Production configuration digest:   PENDING
+Secrets boundary:                  PENDING
+Provider configuration:            PENDING
+Production topology:               PENDING
+```
+
+No smoke-test value is promoted to production configuration merely because it was executable.
+
+## 8. Provider boundary
 
 This packaging record intentionally does not select AWS, GCP, Azure, Kubernetes, Terraform, or another provider.
 
-Provider selection occurs only after the production execution unit and immutable artifact contract are defined.
+Provider selection occurs only after the production artifact has been established.
 
-Therefore:
-
-```text
-Production artifact
-        ↓
-Provider selection
-        ↓
-Target environment
-```
-
-not:
+That artifact now exists; provider selection is therefore the next operational identity decision.
 
 ```text
-Provider selection
-        ↓
-Invent a production artifact around it
+Production artifact       ✓
+Provider                  PENDING
+Target environment        PENDING
 ```
 
-## 12. Semantic boundary
+## 9. Environment boundary
+
+No production environment has been created or authorized by this record.
+
+The GitHub Actions runner is an evidence execution environment only.
+
+The eventual target environment MUST be independently identified by provider, environment name/identity, region/location, and account/project scope before readiness review.
+
+## 10. Semantic boundary
 
 Production packaging is operational infrastructure.
 
@@ -178,56 +176,48 @@ It MUST NOT redefine or modify:
 - verdict semantics;
 - semantic predicates.
 
-Any required semantic change is outside this packaging record and requires its own governance path.
+The runtime invokes the approved executor rather than implementing a replacement semantic engine.
 
-## 13. Required packaging evidence
+## 11. Packaging evidence disposition
 
-Before the Deployment Candidate can move from `IDENTIFICATION PENDING` to `IDENTIFIED`, packaging evidence MUST establish:
+The previously pending packaging requirements are now resolved as follows:
 
-1. production execution unit identity;
-2. successful reproducible build;
-3. immutable artifact creation;
-4. artifact digest;
-5. source-to-artifact binding;
-6. runtime entrypoint verification;
-7. separation from conformance-only tooling;
-8. declared configuration boundary.
+| Requirement | Status |
+|---|---|
+| Production execution unit identity | **RESOLVED** |
+| Production entrypoint | **RESOLVED** |
+| Release build | **PASSED** |
+| Immutable artifact identity | **RESOLVED** |
+| Artifact SHA-256 | **RESOLVED** |
+| Source-to-artifact binding | **RESOLVED** |
+| Runtime entrypoint execution | **PASSED** |
+| Durable runtime persistence | **PASSED** |
+| Conformance separation | **RESOLVED** |
+| Production configuration identity | **PENDING** |
+| Provider identity | **PENDING** |
+| Target environment identity | **PENDING** |
 
-## 14. State
+## 12. Next transition
 
-Current packaging state:
+The Deployment Candidate record may now be updated with the immutable artifact and packaging evidence identities.
 
-```text
-Production execution unit       PARTIALLY DEFINED
-Production entrypoint           PENDING
-Build method                     PENDING
-Immutable artifact               PENDING
-Artifact SHA-256                 PENDING
-Configuration contract           PENDING
-Provider                         NOT SELECTED
-Target environment               NOT SELECTED
-Production authorization         NOT GRANTED
-```
-
-## 15. Next transition
-
-The next implementation action is to define the production execution entrypoint and build contract in the repository.
-
-Only after that implementation exists and produces a verifiable immutable artifact may the Deployment Candidate record be updated with the artifact identity.
+It MUST remain short of `IDENTIFIED` until the remaining production configuration, provider, and target environment identities are bound.
 
 The next governance review remains:
 
 **Cloud Production Readiness Review v0.1**
 
-It MUST NOT be executed until the Deployment Candidate identity requirements are satisfied.
+It MUST NOT be executed until the Deployment Candidate identity requirements are fully satisfied.
 
-## 16. Governance invariant
+## 13. Governance invariant
 
-> A build artifact becomes a production deployment candidate only when its execution unit, source revision, build provenance, immutable identity, configuration boundary, and target environment can be explicitly bound and independently verified.
+> Production packaging evidence establishes that a concrete immutable executable exists and can be invoked and persisted through the approved operational boundary; it does not establish a production environment or authorize deployment.
 
 ---
 
 **Record:** Cloud Production Packaging v0.1  
-**Status:** DEFINED / IMPLEMENTATION PENDING  
+**Status:** EVIDENCE COLLECTED / PROVIDER AND ENVIRONMENT PENDING  
 **Production authorization:** NOT GRANTED  
+**Packaging evidence run:** `31922170829`  
+**Artifact SHA-256:** `be5923f34e905bb8c09ad12fa89545f3c9c5a9ddffe817f53db25b9337accc71`  
 **Decision date:** 2026-08-16
