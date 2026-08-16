@@ -104,6 +104,7 @@ pub struct LifeGraph {
 pub struct EvolvablePid(Pid);
 
 impl EvolvablePid {
+    #[cfg(test)]
     pub(crate) fn from_filtered(pid: Pid, level: ProtectionLevel) -> Option<Self> {
         matches!(
             level,
