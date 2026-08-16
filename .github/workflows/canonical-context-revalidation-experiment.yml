@@ -1,0 +1,97 @@
+name: Canonical Context Revalidation Experiment
+
+on:
+  push:
+    branches:
+      - 'experiment/canonical-context-revalidation'
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-context-revalidation:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout experiment branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pin exact candidate under test
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --detach 4a2f97c7703f17458c831721dfbba31f68f1cb1d
+          test "$(git rev-parse HEAD)" = "4a2f97c7703f17458c831721dfbba31f68f1cb1d"
+          test -z "$(git status --porcelain)"
+
+      - name: Initial canonical context is READY
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p experiment-evidence
+          set +e
+          EXPECTED_COMMIT=4a2f97c7703f17458c831721dfbba31f68f1cb1d bash scripts/agent-environment-gate.sh > experiment-evidence/initial-gate.stdout 2> experiment-evidence/initial-gate.stderr
+          rc=$?
+          set -e
+          cat experiment-evidence/initial-gate.stdout
+          cat experiment-evidence/initial-gate.stderr >&2
+          printf 'initial_gate_exit=%s\n' "$rc" | tee experiment-evidence/initial-gate.result
+          test "$rc" -eq 0
+          grep -Fq 'AGENT_ENVIRONMENT: READY' experiment-evidence/initial-gate.stdout
+
+      - name: Drift canonical repository without dirtying workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote set-url origin https://github.com/example/not-canonical.git
+          test -z "$(git status --porcelain)"
+          printf 'remote_after_drift=%s\n' "$(git remote get-url origin)" | tee experiment-evidence/drift.txt
+          printf 'workspace_after_drift=' | tee -a experiment-evidence/drift.txt
+          git status --porcelain | tee -a experiment-evidence/drift.txt
+
+      - name: Re-enter mutation entrypoint after clean-workspace context drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          sentinel="$RUNNER_TEMP/canonical-context-revalidation-mutation-sentinel"
+          rm -f "$sentinel"
+          set +e
+          EXPECTED_COMMIT=4a2f97c7703f17458c831721dfbba31f68f1cb1d bash scripts/agent-mutation-entrypoint.sh 4a2f97c7703f17458c831721dfbba31f68f1cb1d -- touch "$sentinel" > experiment-evidence/reentry.stdout 2> experiment-evidence/reentry.stderr
+          rc=$?
+          set -e
+          cat experiment-evidence/reentry.stdout
+          cat experiment-evidence/reentry.stderr >&2
+          printf 'reentry_exit=%s\n' "$rc" | tee experiment-evidence/reentry.result
+          if [[ -e "$sentinel" ]]; then
+            echo 'mutation_sentinel=present' | tee experiment-evidence/reentry.result
+          else
+            echo 'mutation_sentinel=absent' | tee experiment-evidence/reentry.result
+          fi
+          test "$rc" -ne 0
+          test ! -e "$sentinel"
+          grep -Fq 'AGENT_ENVIRONMENT: NOT_READY' experiment-evidence/reentry.stdout
+          grep -Fq 'reason=canonical-repository-mismatch' experiment-evidence/reentry.stderr
+
+      - name: Record raw experiment summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "candidate=4a2f97c7703f17458c831721dfbba31f68f1cb1d"
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "workflow=$GITHUB_WORKFLOW"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "final_head=$(git rev-parse HEAD)"
+            echo "final_remote=$(git remote get-url origin)"
+            echo "final_workspace_status=$(git status --porcelain)"
+          } | tee experiment-evidence/summary.txt
+
+      - name: Upload raw experiment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-context-revalidation-evidence-${{ github.run_id }}
+          path: experiment-evidence/
+          if-no-files-found: error
