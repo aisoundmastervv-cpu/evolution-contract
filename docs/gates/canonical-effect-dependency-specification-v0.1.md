@@ -1,0 +1,286 @@
+# Canonical Effect Dependency Specification v0.1
+
+Status: DRAFT / NOT ADMITTED
+Parent design: `Authority Capability Model v0.1`
+Related invariant: `Authority Monotonicity Invariant v0.1`
+
+## Purpose
+
+Define the canonical semantic boundary used to determine whether execution dependencies are either:
+
+1. causally accounted for in authority-relevant effects; or
+2. proven noninterfering with respect to the canonical effect semantics.
+
+This document is a governance/design object only. It creates no authority and does not authorize executor, token, enforcement, or execution implementation.
+
+## 1. Normative boundary
+
+Authorization is valid only if every authority-relevant effect is causally accounted for by the canonical dependency closure, and every dependency outside that closure is proven noninterfering with respect to the canonical effect semantics.
+
+```text
+AUTHORIZATION_VALID =>
+    EFFECT_DEPENDENCIES ⊆ CANONICAL_CLOSURE
+    AND
+    ∀ d ∉ CANONICAL_CLOSURE:
+        PROVEN_NONINTERFERING(d)
+```
+
+An unresolved dependency is not treated as irrelevant.
+
+```text
+UNRESOLVED => NOT_AUTHORIZED
+```
+
+## 2. Canonical effect function
+
+Authority-relevant effects are defined relative to a canonical semantic function:
+
+```text
+E = F(C, S, D)
+```
+
+where:
+
+- `C` = capability vector;
+- `S` = exact executor/effect semantics;
+- `D` = execution dependency context;
+- `E` = complete authority-relevant effect set.
+
+The specification MUST define the effect universe sufficiently to distinguish authority-relevant changes.
+
+## 3. Causal relevance criterion
+
+A dependency `d` is causally relevant iff there exist two admissible values `d1` and `d2`, with all other authorization inputs held equal, such that:
+
+```text
+F(C, S, D[d:=d1]) != F(C, S, D[d:=d2])
+```
+
+If this condition holds, `d` MUST be included in the canonical dependency closure and bound by the authorization lineage.
+
+The test is semantic, not syntactic. A dependency cannot be excluded merely because it is absent from a configuration file, interface, or declaration.
+
+## 4. Independence criterion
+
+A dependency may be classified `INDEPENDENT` only when the system has a valid justification that, over its allowed domain:
+
+```text
+∀ d1,d2:
+    F(C, S, D[d:=d1]) = F(C, S, D[d:=d2])
+```
+
+This is a positive noninterference claim.
+
+Empirical observation alone is not sufficient to establish universal independence unless the tested domain is itself the complete normative domain and the test provides exhaustive coverage of that domain.
+
+## 5. Dependency states
+
+Every dependency considered by the specification MUST have exactly one of these states:
+
+```text
+BOUND
+INDEPENDENT
+UNRESOLVED
+```
+
+### BOUND
+
+The dependency can affect authority-relevant effects and is included in the canonical execution context through an explicit identity, hash, policy, constraint, or equivalent canonical binding.
+
+### INDEPENDENT
+
+The dependency is outside the canonical closure because noninterference with authority-relevant effects has been positively established under the canonical effect semantics and allowed domain.
+
+### UNRESOLVED
+
+The system cannot establish either causal binding or valid noninterference.
+
+```text
+UNRESOLVED => NOT_AUTHORIZED
+```
+
+## 6. Canonical dependency universe
+
+The specification MUST define the normative universe of possible execution dependencies for the relevant executor class. At minimum, candidates include:
+
+```text
+executor artifact
+executor semantics
+runtime
+libraries/dependencies
+configuration
+filesystem/mount policy
+network policy
+credentials/identity context
+kernel/host security policy
+sandbox policy
+hardware capability
+clock/time source
+randomness source
+DNS/name resolution
+external services
+resource enforcement
+dynamic plugins/extensions
+```
+
+This is a dependency universe, not a claim that every item is always authority-relevant.
+
+Each candidate MUST be classified `BOUND`, `INDEPENDENT`, or `UNRESOLVED`.
+
+## 7. Dependency record
+
+Each canonical dependency record SHOULD contain:
+
+```text
+DependencyRecord {
+    dependency_id
+    dependency_class
+    canonical_identity
+    semantic_role
+    allowed_domain
+    authority_relevance
+    binding_method
+    binding_identity
+    independence_claim
+    verification_method
+    status
+}
+```
+
+The record MUST make it possible to determine why a dependency is in the closure, why it is proven independent, or why authorization is blocked.
+
+## 8. Closure completeness
+
+For every authority-relevant effect `e`:
+
+```text
+DEPENDENCIES(e) ⊆ CANONICAL_DEPENDENCY_CLOSURE
+```
+
+For every dependency excluded from the closure:
+
+```text
+d ∉ CANONICAL_DEPENDENCY_CLOSURE
+    =>
+PROVEN_NONINTERFERING(d)
+```
+
+The closure is therefore complete by construction: an effect dependency is either bound or independently proven irrelevant.
+
+There is no fourth state such as `probably irrelevant`, `ambient but trusted`, or `implementation detail`.
+
+## 9. Ambient dependency rule
+
+A dependency remains authority-relevant even if it is:
+
+- outside the executor's explicit API;
+- outside the configuration format;
+- supplied by the operating environment;
+- normally stable;
+- inconvenient to hash;
+- treated as implementation detail.
+
+If changing it can change authority-relevant effects, it belongs to the canonical closure.
+
+Examples include time, DNS, ambient credentials, host policy, external service responses, or dynamic loading when those factors influence effects.
+
+## 10. Semantic normalization
+
+Different representations of the same authority-relevant dependency MUST be normalized before relevance is evaluated.
+
+Examples include:
+
+```text
+localhost / loopback / local socket
+hostname / resolved endpoint
+alias / canonical resource identity
+multiple credential representations / same effective identity
+```
+
+Normalization MUST preserve authority-relevant distinctions. An alias cannot be used to hide a semantic change.
+
+## 11. Fail-closed rule
+
+The executor MUST NOT infer independence from absence of evidence.
+
+```text
+no causal proof
+AND
+no independence proof
+        ↓
+UNRESOLVED
+        ↓
+NOT_AUTHORIZED
+```
+
+Operational success, artifact existence, historical stability, or a human assertion cannot convert `UNRESOLVED` into `INDEPENDENT`.
+
+## 12. Canonical binding requirement
+
+Every `BOUND` dependency MUST be linked to the authorization lineage through a canonical identity appropriate to its semantics.
+
+A hash is an integrity binding for the bytes or canonical representation it covers. It is not, by itself, proof that the dependency boundary is complete.
+
+Therefore:
+
+```text
+binding integrity
+    !=
+boundary completeness
+```
+
+Both properties are required.
+
+## 13. Adversarial obligations
+
+The specification MUST survive at least these counterexamples:
+
+### CED-001 — omitted ambient dependency
+
+A dependency outside the declared interface changes an authority-relevant effect.
+
+Expected: dependency becomes `BOUND`; prior authorization is invalid until rebinding occurs.
+
+### CED-002 — false independence
+
+A dependency is labeled `INDEPENDENT`, but two allowed values produce different authority-relevant effects.
+
+Expected: `INDEPENDENT` classification fails; dependency becomes `BOUND` or `UNRESOLVED`.
+
+### CED-003 — incomplete universe
+
+A real dependency is absent from the candidate dependency universe.
+
+Expected: authorization cannot be considered valid until the universe is extended and the dependency classified.
+
+### CED-004 — semantic alias
+
+Two syntactically different values represent materially different effective authority.
+
+Expected: normalization preserves the distinction; effect difference remains visible.
+
+### CED-005 — hidden external effect
+
+An external service, DNS result, credential, or host policy changes effective authority without changing the declared executor artifact.
+
+Expected: dependency is treated as authority-relevant and must be bound or independently proven noninterfering.
+
+### CED-006 — empirical false negative
+
+Many tests observe no effect from a dependency, but the allowed domain contains an untested value that changes effects.
+
+Expected: testing alone does not establish universal `INDEPENDENT` status.
+
+## 14. Governance boundary
+
+This specification defines a criterion and evidence model. It does not itself establish any execution authority.
+
+```text
+DESIGN STATUS: DRAFT
+ADMISSION STATUS: NOT ADMITTED
+TOKEN IMPLEMENTATION: NOT AUTHORIZED
+ENFORCEMENT IMPLEMENTATION: NOT AUTHORIZED
+EXECUTION AUTHORIZATION: NOT GRANTED
+```
+
+A future implementation MUST consume an admitted version of this specification rather than silently extending its semantic boundary.
