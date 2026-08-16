@@ -8,24 +8,34 @@
 - Empirical validity: **NOT TESTED**.
 
 ## H3
-- Status: **BLOCKED**.
-- The evolution crate has no independent execution mechanism, workload runner, or CPU measurement path.
-- The repository's existing cloud-execution substrate is infrastructure-only: it records execution identity, artifacts, machine state, recovery, and operational failures, but does not assign semantic meaning to resource usage or measure CPU cost.
-- Therefore the existing cloud layer is **not** an H3 causal bridge.
-- Do not add an execution engine to the H2 crate merely to force H3 forward.
-- H3 direction is now fixed at the design level: OS-level causal bridge, primary Linux cgroup CPU controller, fallback Linux `nice` / scheduler priority.
-- Mapping `efficiency -> actuator parameter` remains intentionally unspecified until a specific execution arm is pre-registered independently of observed CPU outcomes.
-- No H3 implementation or causal conclusion is authorized by this state record.
+- Status: **ARM REGISTERED / RUN BLOCKED**.
+- EEC-003 execution gate: **CLOSED / PASS**.
+- The repository's existing cloud-execution substrate remains infrastructure-only: it records execution identity, artifacts, machine state, recovery, and operational failures, but does not assign semantic meaning to resource usage or measure CPU cost.
+- Therefore the existing cloud layer is **not** itself an H3 causal bridge.
+- H3 direction remains an OS-level causal bridge, with Linux cgroup CPU controller as the primary design arm and Linux `nice` / scheduler priority as the fallback.
+- A2 established that the cgroup CPU-controller capability is absent in the validated environment. No new A2 experiment or retry is authorized by this state.
+- The registered executable fallback arm is `H3-OS-NICE-CAUSAL-v0.1`, documented in `docs/execution/h3-os-causal-execution-arm-v0.1.md`.
+- Registered control condition: `nice 0`.
+- Registered treatment condition: `nice +10`.
+- The treatment parameter is fixed before execution and MUST NOT be changed after observing results.
+- Mapping `efficiency -> actuator parameter` remains non-implicit; no outcome-derived parameter selection is permitted.
+- H3 causal run remains **NOT EXECUTED**.
+- No H3 causal conclusion is established.
+
+## H3 execution prerequisites
+- The target workload must be deterministic, CPU-bound, external to frozen H2 implementation/tests, and identified by exact repository path and revision.
+- Control and treatment must use the same workload and inputs.
+- Niceness must be independently observed at runtime.
+- Environment identity must be verified using the EEC-003 mechanism before and during the registered execution protocol.
+- Raw control and treatment evidence must be materialized with complete provenance.
+- A canonical pre-registered H3 acceptance threshold has not been located in the verified repository state. It MUST be recovered from canonical Git history, or explicitly registered before execution; it MUST NOT be invented or retuned after results.
+- If the acceptance threshold cannot be established before execution, H3 remains blocked.
 
 ## Provenance incident containment
 - PR #8 (`h3/design-requirements-v1`) was created from this repository but was not part of the canonical approved continuation and was closed without merge.
 - Its artifact is non-canonical and must not be treated as approved H3 state.
 - The incident demonstrated that conversation continuity alone was insufficient to prevent cross-context identity confusion.
-- `.project/IDENTITY.md` is now the mandatory repository-level identity anchor.
-
-## Next legitimate H3 step
-- Read-only recovery and approval of the H3 design contract may proceed only after repository identity and branch lineage are verified against `.project/IDENTITY.md`.
-- Implementation requires an approved design contract and must remain outside frozen H2 implementation/tests.
+- `.project/IDENTITY.md` is the mandatory repository-level identity anchor.
 
 ## Architecture
 ```text
