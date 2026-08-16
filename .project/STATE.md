@@ -8,7 +8,7 @@
 - Empirical validity: **NOT TESTED**.
 
 ## H3
-- Status: **ARM REGISTERED / RUN BLOCKED**.
+- Status: **ARM REGISTERED / CRITERION ADMITTED / RUN NOT EXECUTED**.
 - EEC-003 execution gate: **CLOSED / PASS**.
 - The repository's existing cloud-execution substrate remains infrastructure-only: it records execution identity, artifacts, machine state, recovery, and operational failures, but does not assign semantic meaning to resource usage or measure CPU cost.
 - Therefore the existing cloud layer is **not** itself an H3 causal bridge.
@@ -19,6 +19,12 @@
 - Registered treatment condition: `nice +10`.
 - The treatment parameter is fixed before execution and MUST NOT be changed after observing results.
 - Mapping `efficiency -> actuator parameter` remains non-implicit; no outcome-derived parameter selection is permitted.
+- `H3-ACP-001` is now **ADMITTED** as the normative acceptance criterion for this execution arm.
+- Registered primary observable: paired wall-clock runtime ratio `R_i = T_treatment,i / T_control,i`.
+- Registered minimum sample: **10 valid paired trials**.
+- Registered directional criterion: **at least 9/10 pairs with `R_i > 1`**.
+- Registered effect floor: **median `R >= 1.10`**.
+- No outlier deletion is permitted; invalidity must be established by protocol violation, not by an inconvenient numerical result.
 - H3 causal run remains **NOT EXECUTED**.
 - No H3 causal conclusion is established.
 
@@ -28,8 +34,8 @@
 - Niceness must be independently observed at runtime.
 - Environment identity must be verified using the EEC-003 mechanism before and during the registered execution protocol.
 - Raw control and treatment evidence must be materialized with complete provenance.
-- A canonical pre-registered H3 acceptance threshold has not been located in the verified repository state. It MUST be recovered from canonical Git history, or explicitly registered before execution; it MUST NOT be invented or retuned after results.
-- If the acceptance threshold cannot be established before execution, H3 remains blocked.
+- The runner MUST consume `H3-ACP-001` as admitted contract/configuration data and MUST NOT hard-code a different criterion.
+- The workload runner and workflow may now be designed and implemented within the registered H3 scope.
 
 ## Provenance incident containment
 - PR #8 (`h3/design-requirements-v1`) was created from this repository but was not part of the canonical approved continuation and was closed without merge.
