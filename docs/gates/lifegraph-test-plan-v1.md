@@ -1,6 +1,6 @@
 # LifeGraph Test Plan v1
 
-Status: **REVIEW DRAFT — TEST EXECUTION NOT AUTHORIZED**
+Status: **REVIEWED DRAFT — EXECUTION NOT AUTHORIZED**
 
 ## Frozen inputs
 
@@ -41,21 +41,25 @@ Oracle relation: active-process → required active-LifeGraph correspondence.
 
 ### LG-P02 — Accepted birth
 
-Setup: establish a valid parent process and a transition that produces an accepted child.
+Setup: establish a valid parent process and a transition whose **semantic outcome is an accepted birth under Contract v1.0 §6**.
 
-Action: execute the accepted birth transition.
+Action: execute that birth transition.
 
 Expected: child process exists; corresponding active LifeGraph node exists; required parent/child relation and birth metadata are present; child is eligible for scheduling.
+
+The harness must identify the accepted birth by the semantic transition outcome, not by a particular Rust return type, helper result, or internal control-flow signal.
 
 Oracle relations: birth semantics in C-LG/O-LG.
 
 ### LG-P03 — Accepted death
 
-Setup: establish an active process and a transition that produces an accepted death.
+Setup: establish an active process and a transition whose **semantic outcome is an accepted death under Contract v1.0 §6**.
 
-Action: execute the accepted death transition.
+Action: execute that death transition.
 
 Expected: the formerly active process has no active LifeGraph node; required death metadata is recorded; historical representation is present in fossil/history.
+
+The harness must identify the accepted death by the semantic transition outcome, not by a particular Rust return type, helper result, or internal control-flow signal.
 
 Oracle relations: death semantics in C-LG/O-LG.
 
@@ -73,11 +77,19 @@ Construct an accepted-birth outcome in which the child process exists but the re
 
 Expected: Oracle rejects the state.
 
-### LG-N03 — Birth missing parent/child relation or birth metadata
+### LG-N03a — Birth missing parent/child relation
 
-Construct an accepted-birth outcome in which the child and active node exist but a required parent/child relation or birth metadata is absent.
+Construct an accepted-birth outcome in which the child process and required active LifeGraph node exist, but the required parent/child relation is absent.
 
-Expected: Oracle rejects the state.
+Expected: Oracle rejects the state for the missing relation.
+
+### LG-N03b — Birth missing birth metadata
+
+Construct an accepted-birth outcome in which the child process, required active LifeGraph node, and parent/child relation exist, but required birth metadata is absent.
+
+Expected: Oracle rejects the state for the missing metadata.
+
+Each subcase must isolate the named missing semantic relation/metadata item so that the failure attribution is unambiguous.
 
 ### LG-N04 — Death leaves active LifeGraph node
 
@@ -85,11 +97,19 @@ Construct an accepted-death outcome in which the formerly active LifeGraph node 
 
 Expected: Oracle rejects the state.
 
-### LG-N05 — Death missing historical representation or required death metadata
+### LG-N05a — Death missing historical representation
 
-Construct an accepted-death outcome in which the active node is removed but the required historical representation or death metadata is absent.
+Construct an accepted-death outcome in which the active node is removed and required death metadata is present, but the required historical representation is absent from fossil/history.
 
-Expected: Oracle rejects the state.
+Expected: Oracle rejects the state for the missing historical representation.
+
+### LG-N05b — Death missing death metadata
+
+Construct an accepted-death outcome in which the active node is removed and the required historical representation is present, but required death metadata is absent.
+
+Expected: Oracle rejects the state for the missing metadata.
+
+Each subcase must isolate the named missing semantic relation/metadata item so that the failure attribution is unambiguous.
 
 ## 5. Deliberate non-tests
 
