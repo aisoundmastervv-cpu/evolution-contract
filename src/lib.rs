@@ -1,3 +1,4 @@
+pub mod h3_execution;
 pub mod validation_executor;
 
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -311,7 +312,7 @@ impl PhiScheduler {
             if self.processes.contains_key(&pid) || !pending_pids.insert(pid) {
                 return Err(ApplyError::Build(BuildError::PidCollision { pid }));
             }
-            pending.push(builder.build_child(parent, pid, request.mutation_rate, ordinal)?);
+            pending.push(builder.build_child(parent, pid, request.mutation_rate, ordinal).map_err(ApplyError::Build)?);
         }
 
         let generation_before = self.generation;
@@ -417,7 +418,7 @@ impl PhiScheduler {
         let branch_parents: HashSet<_> = plan.branches.iter().map(|b| b.parent.get()).collect();
         if let Some(pid) = death_ids.intersection(&branch_parents).next() {
             return Err(ApplyError::Structural(
-                StructuralViolation::ConflictingRequest { pid: **pid },
+                StructuralViolation::ConflictingRequest { pid: *pid },
             ));
         }
 

@@ -1,0 +1,46 @@
+name: H3 fmt diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - h3/design-requirements-v1
+
+jobs:
+  fmt-diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run rustfmt
+        run: cargo fmt --all
+
+      - name: Capture rustfmt diff
+        shell: bash
+        run: |
+          set -o pipefail
+          git diff -- src/h3_execution.rs | tee h3-rustfmt.diff
+          if git diff --quiet -- src/h3_execution.rs; then
+            echo "NO_DIFF"
+          else
+            echo "DIFF_EXISTS"
+          fi
+
+      - name: Show baseline compiler-error locations
+        shell: bash
+        run: |
+          echo '--- src/validation_executor.rs:125-140 ---'
+          nl -ba src/validation_executor.rs | sed -n '125,140p'
+          echo '--- src/lib.rs:305-325 ---'
+          nl -ba src/lib.rs | sed -n '305,325p'
+
+      - name: Upload rustfmt diff
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-rustfmt-diagnostic
+          path: h3-rustfmt.diff
+          if-no-files-found: error
