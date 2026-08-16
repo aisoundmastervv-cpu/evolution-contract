@@ -1,3 +1,4 @@
+# EEC-003 execution harness is registered on main for pull_request execution.
 name: EEC-003 Environment Revalidation
 
 on:
