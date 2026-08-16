@@ -1,46 +1,39 @@
-# EEC-003 execution candidate: push-triggered run on the exact candidate branch.
 name: EEC-003 Environment Revalidation
 
 on:
   push:
-    branches:
-      - cloud/eec-003-environment-revalidation
-      - cloud/eec-003-execution-candidate
+    branches: ['cloud/eec-003-execution-candidate']
   pull_request:
-    branches:
-      - main
-    paths:
-      - 'scripts/agent-environment-gate.sh'
-      - 'scripts/agent-mutation-entrypoint.sh'
-      - 'scripts/environment-preflight.sh'
-      - 'scripts/bootstrap-environment.sh'
-      - 'docs/execution/environment-contract-v0.1.md'
-      - 'docs/execution/eec-003-environment-revalidation-v0.1.md'
-      - '.github/workflows/eec-003-environment-revalidation.yml'
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-env:
-  EEC_EVIDENCE: ${{ runner.temp }}/eec-003-evidence.txt
-
 jobs:
-  eec-003:
-    runs-on: ubuntu-24.04
+  eec-003-environment-revalidation:
+    name: EEC-003 environment revalidation
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Checkout exact candidate commit
+      - name: Checkout exact candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Establish initial READY and record clean canonical state
-        env:
-          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Install reference Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Establish initial READY and record canonical state
+        shell: bash
         run: |
           set -euo pipefail
+          evidence="$RUNNER_TEMP/eec-003-evidence.txt"
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$EXPECTED_COMMIT"
+          test -z "$(git status --porcelain)"
           remote="$(git remote get-url origin)"
           contract_sha="$(sha256sum docs/execution/environment-contract-v0.1.md | awk '{print $1}')"
           bootstrap_sha="$(sha256sum scripts/bootstrap-environment.sh | awk '{print $1}')"
@@ -54,26 +47,25 @@ jobs:
             "rustc=$rustc_version" \
             "cargo=$cargo_version")
           environment_id="$(printf '%s' "$identity_input" | sha256sum | awk '{print $1}')"
-          test -z "$(git status --porcelain)"
           {
             printf 'expected_commit=%s\n' "$EXPECTED_COMMIT"
             printf 'initial_remote=%s\n' "$remote"
             printf 'initial_head=%s\n' "$actual"
-            printf 'initial_workspace_status='; git status --porcelain
+            printf 'initial_workspace_status=%s\n' "$(git status --porcelain)"
             printf 'initial_environment_id=%s\n' "$environment_id"
             printf 'initial_rustc=%s\n' "$rustc_version"
             printf 'initial_cargo=%s\n' "$cargo_version"
-          } | tee "$EEC_EVIDENCE"
-          EXPECTED_COMMIT="$EXPECTED_COMMIT" EXPECTED_ENVIRONMENT_ID="$environment_id" bash scripts/agent-environment-gate.sh | tee -a "$EEC_EVIDENCE"
-          grep -Fq 'AGENT_ENVIRONMENT: READY' "$EEC_EVIDENCE"
-          echo 'EEC-003: initial READY established' | tee -a "$EEC_EVIDENCE"
+          } | tee "$evidence"
+          EXPECTED_COMMIT="$EXPECTED_COMMIT" EXPECTED_ENVIRONMENT_ID="$environment_id" bash scripts/agent-environment-gate.sh | tee -a "$evidence"
+          grep '^AGENT_ENVIRONMENT: READY$' "$evidence"
           printf 'EXPECTED_ENVIRONMENT_ID=%s\n' "$environment_id" >> "$GITHUB_ENV"
+          echo 'EEC-003: initial READY established' | tee -a "$evidence"
 
-      - name: Controlled environment-only drift and mutation re-entry
-        env:
-          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Controlled environment drift and fail-closed re-entry
+        shell: bash
         run: |
           set -euo pipefail
+          evidence="$RUNNER_TEMP/eec-003-evidence.txt"
           drift_dir="$RUNNER_TEMP/eec-003-drift-bin"
           sentinel="$RUNNER_TEMP/eec-003-mutation-sentinel"
           stderr="$RUNNER_TEMP/eec-003-reentry-stderr.txt"
@@ -101,31 +93,33 @@ EOF
             printf 'drift_remote=%s\n' "$remote"
             printf 'drift_head=%s\n' "$head"
             printf 'drift_workspace_status=%s\n' "$workspace_status"
-          } | tee -a "$EEC_EVIDENCE"
+          } | tee -a "$evidence"
           rm -f "$sentinel" "$stderr"
           set +e
-          EXPECTED_ENVIRONMENT_ID="$EXPECTED_ENVIRONMENT_ID" bash scripts/agent-mutation-entrypoint.sh "$EXPECTED_COMMIT" -- touch "$sentinel" 2>"$stderr" >>"$EEC_EVIDENCE"
+          EXPECTED_ENVIRONMENT_ID="$EXPECTED_ENVIRONMENT_ID" bash scripts/agent-mutation-entrypoint.sh "$EXPECTED_COMMIT" -- touch "$sentinel" 2>"$stderr" >>"$evidence"
           reentry_exit=$?
           set -e
-          cat "$stderr" | tee -a "$EEC_EVIDENCE"
-          printf 'reentry_exit=%s\n' "$reentry_exit" | tee -a "$EEC_EVIDENCE"
+          cat "$stderr" | tee -a "$evidence"
+          printf 'reentry_exit=%s\n' "$reentry_exit" | tee -a "$evidence"
           test "$reentry_exit" -ne 0
-          grep -Fq 'AGENT_ENVIRONMENT: NOT_READY' "$stderr"
+          grep '^AGENT_ENVIRONMENT: NOT_READY$' "$stderr"
           grep -Fq 'reason=environment-identity-mismatch' "$stderr"
           test ! -e "$sentinel"
-          echo 'mutation_sentinel=absent' | tee -a "$EEC_EVIDENCE"
-          echo 'EEC-003: PASS — environment drift revoked mutation authorization' | tee -a "$EEC_EVIDENCE"
+          echo 'mutation_sentinel=absent' | tee -a "$evidence"
+          echo 'EEC-003: PASS — environment drift revoked mutation authorization' | tee -a "$evidence"
 
-      - name: Final invariant record
+      - name: Record final invariant state
         if: always()
+        shell: bash
         run: |
           set -euo pipefail
+          evidence="$RUNNER_TEMP/eec-003-evidence.txt"
           {
             printf 'final_remote=%s\n' "$(git remote get-url origin)"
             printf 'final_head=%s\n' "$(git rev-parse HEAD)"
             printf 'final_workspace_status=%s\n' "$(git status --porcelain)"
             if [[ -e "$RUNNER_TEMP/eec-003-mutation-sentinel" ]]; then echo 'final_mutation_sentinel=present'; else echo 'final_mutation_sentinel=absent'; fi
-          } | tee -a "$EEC_EVIDENCE"
+          } | tee -a "$evidence"
 
       - name: Upload raw EEC-003 evidence
         if: always()
