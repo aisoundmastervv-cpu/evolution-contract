@@ -9,9 +9,11 @@
 
 ## H3
 - Status: **BLOCKED**.
-- Current crate contains no independent execution mechanism, workload runner, or CPU measurement path.
+- The evolution crate has no independent execution mechanism, workload runner, or CPU measurement path.
+- The repository's existing cloud-execution substrate is infrastructure-only: it records execution identity, artifacts, machine state, recovery, and operational failures, but does not assign semantic meaning to resource usage or measure CPU cost.
+- Therefore the existing cloud layer is **not** an H3 causal bridge.
 - Do not add an execution engine to the H2 crate merely to force H3 forward.
-- Next legitimate H3 step is read-only discovery/design of an independent execution environment.
+- Next legitimate H3 step is read-only discovery/design of an independent execution environment with a workload and an independent resource measurement path.
 
 ## Architecture
 ```text
