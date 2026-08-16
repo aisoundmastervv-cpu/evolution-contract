@@ -45,8 +45,36 @@ pub enum Transition {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TransitionTrace {
+    states: [MachineState; 3],
+    len: usize,
+}
+
+impl TransitionTrace {
+    const fn unauthorized_guard() -> Self {
+        Self {
+            states: [
+                MachineState::ForbiddenTransition,
+                MachineState::NotAuthorized,
+                MachineState::Stop,
+            ],
+            len: 3,
+        }
+    }
+
+    pub const fn len(self) -> usize {
+        self.len
+    }
+
+    pub const fn states(self) -> [MachineState; 3] {
+        self.states
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExecutionOutcome {
     Transitioned(MachineState),
+    Unauthorized { trace: TransitionTrace },
     ExecutionAborted,
 }
 
@@ -79,7 +107,9 @@ impl Executor {
                 self.state = MachineState::ForbiddenTransition;
                 self.state = MachineState::NotAuthorized;
                 self.state = MachineState::Stop;
-                ExecutionOutcome::Transitioned(MachineState::Stop)
+                ExecutionOutcome::Unauthorized {
+                    trace: TransitionTrace::unauthorized_guard(),
+                }
             }
         }
     }
@@ -136,12 +166,21 @@ mod tests {
     }
 
     #[test]
-    fn unauthorized_transition_is_blocked_before_action() {
+    fn unauthorized_transition_exposes_full_guard_trace() {
         let mut executor = Executor::new(MachineState::ObservationRequired);
 
         assert_eq!(
             executor.apply(Transition::Verdict(Verdict::Pass)),
-            ExecutionOutcome::Transitioned(MachineState::Stop)
+            ExecutionOutcome::Unauthorized {
+                trace: TransitionTrace {
+                    states: [
+                        MachineState::ForbiddenTransition,
+                        MachineState::NotAuthorized,
+                        MachineState::Stop,
+                    ],
+                    len: 3,
+                },
+            }
         );
         assert_eq!(executor.state(), MachineState::Stop);
     }
@@ -183,7 +222,10 @@ mod tests {
     fn terminal_states_do_not_accept_implicit_retry() {
         let mut executor = Executor::new(MachineState::Stop);
 
-        assert_eq!(executor.apply(Transition::RequireObservation), ExecutionOutcome::Transitioned(MachineState::Stop));
+        assert!(matches!(
+            executor.apply(Transition::RequireObservation),
+            ExecutionOutcome::Unauthorized { .. }
+        ));
         assert_eq!(executor.state(), MachineState::Stop);
     }
 }
