@@ -15,6 +15,9 @@ on:
 permissions:
   contents: read
 
+env:
+  EEC_EVIDENCE: ${{ runner.temp }}/eec-002-evidence.txt
+
 jobs:
   eec-002:
     runs-on: ubuntu-24.04
@@ -31,7 +34,7 @@ jobs:
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$EXPECTED_COMMIT"
-          printf 'expected=%s\nactual=%s\n' "$EXPECTED_COMMIT" "$actual" | tee "$RUNNER_TEMP/eec-002-identity.txt"
+          printf 'expected=%s\nactual=%s\n' "$EXPECTED_COMMIT" "$actual" | tee "$EEC_EVIDENCE"
 
       - name: Negative test — wrong identity blocks mutation
         env:
@@ -46,36 +49,36 @@ jobs:
             exit 1
           fi
           test ! -e "$sentinel"
-          echo 'EEC-002: PASS — wrong identity prevented mutation'
+          echo 'EEC-002: PASS — wrong identity prevented mutation' | tee -a "$EEC_EVIDENCE"
 
       - name: Positive test — conformant entrypoint authorizes mutation
         env:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          sentinel="$RUNNER_TEMP/eec-002-positive-sentinel"
+          sentinel=".eec-002-mutation-sentinel"
           rm -f "$sentinel"
           bash scripts/agent-mutation-entrypoint.sh "$EXPECTED_COMMIT" -- touch "$sentinel"
           test -f "$sentinel"
-          echo 'EEC-002: PASS — conformant entrypoint authorized mutation'
+          echo 'EEC-002: PASS — conformant entrypoint authorized repository mutation' | tee -a "$EEC_EVIDENCE"
 
       - name: Evidence — post-mutation gate is no longer ready
         env:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          printf 'post-mutation status:\n'
-          git status --short
+          printf 'post-mutation status:\n' | tee -a "$EEC_EVIDENCE"
+          git status --short | tee -a "$EEC_EVIDENCE"
           if bash scripts/agent-environment-gate.sh "$EXPECTED_COMMIT"; then
             echo 'EEC-002: FAIL — dirty workspace remained mutation-ready' >&2
             exit 1
           fi
-          echo 'EEC-002: PASS — post-mutation environment is not ready'
+          echo 'EEC-002: PASS — post-mutation environment is not ready' | tee -a "$EEC_EVIDENCE"
 
       - name: Upload EEC-002 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: eec-002-mutation-entry-evidence-${{ github.sha }}
-          path: "$RUNNER_TEMP/eec-002-identity.txt"
-          if-no-files-found: warn
+          path: ${{ runner.temp }}/eec-002-evidence.txt
+          if-no-files-found: error
