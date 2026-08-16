@@ -32,12 +32,24 @@ pub fn execute_approved_once<I: ReferenceExecutorInvoker, S: ExecutionStore>(
                 reason: OperationalFailure::AuthorizationUnavailable,
             },
         };
+        let trace = substrate::ExecutionTrace {
+            execution: context.execution.clone(),
+            attempt: attempt_number,
+            machine_state: context.machine_state.clone(),
+            trace_ref: trace_ref.clone(),
+        };
+        let audit_head = store
+            .load(&context.execution)
+            .map(|record| record.audit_head.clone())
+            .unwrap_or_default();
         store.persist(substrate::PersistedExecution {
             context: context.clone(),
             attempts: vec![attempt.clone()],
             machine_state_ref: context.machine_state,
             trace_ref,
             evidence_ref,
+            trace,
+            audit_head,
         });
         return attempt;
     }
