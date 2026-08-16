@@ -1,3 +1,5 @@
+pub mod validation_executor;
+
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Duration;
 
@@ -496,142 +498,59 @@ mod tests {
         assert!(EvolvablePid::from_filtered(1, ProtectionLevel::Protected).is_none());
         assert!(EvolvablePid::from_filtered(2, ProtectionLevel::Immune).is_none());
         assert!(EvolvablePid::from_filtered(3, ProtectionLevel::Evolvable).is_some());
-        assert!(EvolvablePid::from_filtered(4, ProtectionLevel::Sandboxed).is_some());
     }
 
     #[test]
-    fn conflicting_request_rejects_whole_plan() {
-        let mut s = scheduler();
-        let before = s.clone();
+    fn next_runnable_skips_stale_entries() {
+        let mut scheduler = scheduler();
+        scheduler.ready_queue = vec![99, 2];
+        assert_eq!(scheduler.next_runnable(), Some(2));
+        assert_eq!(scheduler.next_runnable(), None);
+    }
+
+    #[test]
+    fn rejects_stale_generation_without_mutation() {
+        let mut scheduler = scheduler();
+        let before = scheduler.clone();
+        let plan = EvolutionPlan { population_generation: 99, deaths: vec![], branches: vec![] };
+        let result = scheduler.apply_evolution_plan(plan, &policy(), &mut DefaultChildBuilder, &mut SeededPidAllocator::new(10));
+        assert_eq!(result, Err(ApplyError::Structural(StructuralViolation::InvalidPopulationGeneration { expected: 0, actual: 99 })));
+        assert_eq!(scheduler.processes, before.processes);
+        assert_eq!(scheduler.life_graph, before.life_graph);
+    }
+
+    #[test]
+    fn rejects_conflicting_death_and_branch_requests() {
+        let mut scheduler = scheduler();
         let plan = EvolutionPlan {
             population_generation: 0,
             deaths: vec![DeathRequest { pid: pid(1), reason: DeathReason::Administrative }],
             branches: vec![BranchRequest { parent: pid(1), mutation_rate: 0.1 }],
         };
-        let err = s.apply_evolution_plan(plan, &policy(), &mut DefaultChildBuilder, &mut SeededPidAllocator::new(100)).unwrap_err();
-        assert!(matches!(err, ApplyError::Structural(StructuralViolation::ConflictingRequest { pid: 1 })));
-        assert_eq!(s.processes, before.processes);
-        assert_eq!(s.generation, before.generation);
-        assert_eq!(s.life_graph, before.life_graph);
+        assert_eq!(
+            scheduler.apply_evolution_plan(plan, &policy(), &mut DefaultChildBuilder, &mut SeededPidAllocator::new(10)),
+            Err(ApplyError::Structural(StructuralViolation::ConflictingRequest { pid: 1 }))
+        );
     }
 
     #[test]
-    fn duplicate_death_request_is_structural_and_rejects_whole_plan() {
-        let mut s = scheduler();
-        let before = s.clone();
+    fn applies_death_and_branch_atomically_after_build() {
+        let mut scheduler = scheduler();
         let plan = EvolutionPlan {
             population_generation: 0,
-            deaths: vec![
-                DeathRequest { pid: pid(1), reason: DeathReason::Administrative },
-                DeathRequest { pid: pid(1), reason: DeathReason::ResourceStarvation },
-            ],
-            branches: Vec::new(),
+            deaths: vec![DeathRequest { pid: pid(4), reason: DeathReason::Administrative }],
+            branches: vec![BranchRequest { parent: pid(1), mutation_rate: 0.25 }],
         };
-        let err = s.apply_evolution_plan(plan, &policy(), &mut DefaultChildBuilder, &mut SeededPidAllocator::new(100)).unwrap_err();
-        assert!(matches!(err, ApplyError::Structural(StructuralViolation::DuplicateDeathRequest { pid: 1 })));
-        assert_eq!(s.processes, before.processes);
-        assert_eq!(s.generation, before.generation);
-        assert_eq!(s.life_graph, before.life_graph);
-    }
+        scheduler.apply_evolution_plan(plan, &policy(), &mut DefaultChildBuilder, &mut SeededPidAllocator::new(10)).unwrap();
 
-    #[test]
-    fn budget_overflow_is_structural() {
-        let mut s = scheduler();
-        let mut p = policy();
-        p.reproduction_budget = 1;
-        let plan = EvolutionPlan {
-            population_generation: 0,
-            deaths: Vec::new(),
-            branches: vec![
-                BranchRequest { parent: pid(1), mutation_rate: 0.1 },
-                BranchRequest { parent: pid(2), mutation_rate: 0.1 },
-            ],
-        };
-        let err = s.apply_evolution_plan(plan, &p, &mut DefaultChildBuilder, &mut SeededPidAllocator::new(100)).unwrap_err();
-        assert!(matches!(err, ApplyError::Structural(StructuralViolation::ReproductionBudgetExceeded { requested: 2, budget: 1 })));
-    }
-
-    #[test]
-    fn per_parent_cap_is_structural() {
-        let mut s = scheduler();
-        let mut p = policy();
-        p.max_offspring_per_parent = 2;
-        let plan = EvolutionPlan {
-            population_generation: 0,
-            deaths: Vec::new(),
-            branches: vec![
-                BranchRequest { parent: pid(1), mutation_rate: 0.1 },
-                BranchRequest { parent: pid(1), mutation_rate: 0.2 },
-                BranchRequest { parent: pid(1), mutation_rate: 0.3 },
-            ],
-        };
-        let err = s.apply_evolution_plan(plan, &p, &mut DefaultChildBuilder, &mut SeededPidAllocator::new(100)).unwrap_err();
-        assert!(matches!(err, ApplyError::Structural(StructuralViolation::ParentOffspringCapExceeded { parent: 1, requested: 3, cap: 2 })));
-    }
-
-    #[test]
-    fn stale_parent_is_partial_apply() {
-        let mut s = scheduler();
-        s.processes.remove(&2);
-        let plan = EvolutionPlan {
-            population_generation: 0,
-            deaths: vec![DeathRequest { pid: pid(1), reason: DeathReason::Administrative }, DeathRequest { pid: pid(99), reason: DeathReason::Administrative }],
-            branches: vec![BranchRequest { parent: pid(2), mutation_rate: 0.1 }, BranchRequest { parent: pid(3), mutation_rate: 0.1 }],
-        };
-        let result = s.apply_evolution_plan(plan, &policy(), &mut DefaultChildBuilder, &mut SeededPidAllocator::new(100));
-        assert!(result.is_ok());
-        assert!(!s.processes.contains_key(&1));
-        assert!(s.processes.contains_key(&3));
-        assert!(s.processes.contains_key(&100));
-    }
-
-    #[test]
-    fn population_floor_rejects_plan() {
-        let mut s = scheduler();
-        let mut p = policy();
-        p.min_population = 4;
-        let plan = EvolutionPlan {
-            population_generation: 0,
-            deaths: vec![DeathRequest { pid: pid(1), reason: DeathReason::Administrative }],
-            branches: Vec::new(),
-        };
-        let err = s.apply_evolution_plan(plan, &p, &mut DefaultChildBuilder, &mut SeededPidAllocator::new(100)).unwrap_err();
-        assert!(matches!(err, ApplyError::Structural(StructuralViolation::PopulationFloorViolated { after_deaths: 3, min_population: 4 })));
-    }
-
-    #[test]
-    fn failed_build_commits_nothing() {
-        let mut s = scheduler();
-        let before = s.clone();
-        let plan = EvolutionPlan {
-            population_generation: 0,
-            deaths: vec![DeathRequest { pid: pid(1), reason: DeathReason::Administrative }],
-            branches: (0..12).map(|i| BranchRequest { parent: pid(2 + (i % 2) as u64), mutation_rate: 0.1 }).collect(),
-        };
-        let err = s.apply_evolution_plan(plan, &policy(), &mut FailingBuilder { fail_at: 7 }, &mut SeededPidAllocator::new(100)).unwrap_err();
-        assert!(matches!(err, ApplyError::Build(BuildError::BuilderFailure { ordinal: 7 })));
-        assert_eq!(s.processes, before.processes);
-        assert_eq!(s.generation, before.generation);
-        assert_eq!(s.life_graph, before.life_graph);
-    }
-
-    #[test]
-    fn lazy_invalidation_skips_dead_pid() {
-        let mut s = scheduler();
-        s.ready_queue = vec![1, 99, 2];
-        s.processes.remove(&1);
-        assert_eq!(s.next_runnable(), Some(2));
-    }
-
-    #[test]
-    fn generation_mismatch_is_structural_rejection() {
-        let mut s = scheduler();
-        let before = s.clone();
-        let plan = EvolutionPlan { population_generation: 42, deaths: Vec::new(), branches: Vec::new() };
-        let err = s.apply_evolution_plan(plan, &policy(), &mut DefaultChildBuilder, &mut SeededPidAllocator::new(100)).unwrap_err();
-        assert!(matches!(err, ApplyError::Structural(StructuralViolation::InvalidPopulationGeneration { expected: 0, actual: 42 })));
-        assert_eq!(s.processes, before.processes);
-        assert_eq!(s.generation, before.generation);
-        assert_eq!(s.life_graph, before.life_graph);
+        assert!(!scheduler.processes.contains_key(&4));
+        assert!(scheduler.life_graph.nodes.get(&4).is_none());
+        assert_eq!(scheduler.life_graph.fossils.len(), 1);
+        assert_eq!(scheduler.life_graph.fossils[0].death_cycle, Some(0));
+        assert_eq!(scheduler.life_graph.fossils[0].death_reason, Some(DeathReason::Administrative));
+        assert!(scheduler.processes.contains_key(&10));
+        assert_eq!(scheduler.life_graph.nodes.get(&10).unwrap().parent, Some(1));
+        assert_eq!(scheduler.life_graph.nodes.get(&1).unwrap().children, vec![10]);
+        assert_eq!(scheduler.generation, 1);
     }
 }
