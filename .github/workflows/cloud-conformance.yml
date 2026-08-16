@@ -63,6 +63,7 @@ jobs:
           path: cloud-evidence/
           if-no-files-found: error
 
+  # Experimental execution only: canonical-context revalidation.
   canonical-context-revalidation-experiment:
     name: canonical context revalidation experiment
     runs-on: ubuntu-24.04
