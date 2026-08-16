@@ -1,10 +1,8 @@
-# H3-CAP-001 — Execution Design v0.2
+# H3-CAP-001 — Execution Design v0.3
 
 **Status:** DESIGN / NOT AUTHORIZED FOR EXECUTION
 
 **Proposal ID:** `H3-CAP-001`
-
-**Design class:** Causal-disambiguation execution design
 
 **Parent admission record:** `docs/gates/h3-cap-001-admission-record-v0.1.md`
 
@@ -31,7 +29,7 @@ This design does **not** revise, repair, reinterpret, or invalidate frozen execu
 
 The historical branch remains immutable and causally closed.
 
-After this revision, the assignment rule, sample size, validity rules, estimand, evidence rule, and stopping rule are all fixed prospectively by this document. None may be changed after the first observation is materialized.
+After this revision, the assignment rule, sample size, validity rules, estimand, evidence rule, confidence procedure, and stopping rule are all fixed prospectively by this document. None may be changed after the first observation is materialized.
 
 ## 3. Identifiable factors
 
@@ -65,7 +63,7 @@ Z = +1  control first, treatment second
 
 ### 4.1 Fixed sample
 
-The protocol schedules exactly **24 pairs**, with a target and minimum of **12 pairs in each order stratum**.
+The protocol schedules exactly **24 pairs**, with exactly **12 pairs in each order stratum**.
 
 There is **no adaptive sample extension**. If fewer than 12 valid pairs are available in either order stratum after the 24 scheduled pairs, the prospective result is `INCONCLUSIVE`.
 
@@ -162,17 +160,41 @@ Neither pattern is to be interpreted from a single pair or from selectively excl
 
 ## 8. Prospective evidence and verdict criterion
 
-The following rule is fixed before execution and is the sole primary decision rule for the prospective H3 analysis.
+The sole primary decision rule is fixed before execution.
 
-For `tau_hat` and `delta_hat`, compute **two-sided 95% confidence intervals using the pre-specified paired analysis**. The exact implementation MUST use the same estimator and confidence procedure for both order strata and MUST be recorded before execution authorization.
+### 8.1 Exact confidence procedure
+
+For each order stratum, compute the paired mean contrast and its **Student-t confidence interval with 95% two-sided coverage**, using the within-stratum sample standard deviation of `D_i` and degrees of freedom `n-1`.
+
+For the primary treatment component, define:
+
+```text
+CI_tau = CI95(mean_plus + mean_minus over 2)
+```
+
+For the primary order component, define:
+
+```text
+CI_delta = CI95((mean_plus - mean_minus) over 2)
+```
+
+The implementation MUST use the same deterministic formula, degrees-of-freedom convention, and rounding rule for every execution. No bootstrap, Bayesian interval, robust interval, or alternative confidence procedure may replace this primary procedure without a new design revision and governance decision.
+
+The numeric treatment direction is:
+
+```text
+E1 treatment direction: tau > 0
+```
+
+The numeric order direction is not pre-claimed as positive or negative; E2 is about a non-zero order component, with its observed sign reported without changing the criterion.
 
 ### E1-supporting verdict
 
 E1 may be supported only if all of the following hold:
 
-1. the 95% confidence interval for `tau_hat` excludes zero;
-2. `tau_hat` has the direction registered for the treatment hypothesis;
-3. the 95% confidence interval for `delta_hat` includes zero;
+1. `CI_tau` excludes zero;
+2. `tau_hat > 0`;
+3. `CI_delta` includes zero;
 4. at least 12 valid pairs exist in each order stratum;
 5. no identification assumption in Section 6 is violated.
 
@@ -180,9 +202,9 @@ E1 may be supported only if all of the following hold:
 
 E2 may be supported only if all of the following hold:
 
-1. the 95% confidence interval for `delta_hat` excludes zero;
-2. the order-associated component changes the paired contrast in the observed direction;
-3. the 95% confidence interval for `tau_hat` includes zero **or** the pre-specified joint analysis shows that the treatment effect is not separable from the order effect;
+1. `CI_delta` excludes zero;
+2. the observed `delta_hat` is reported with its sign, without post-hoc relabelling;
+3. `CI_tau` includes zero, or a separately pre-specified joint interpretation shows that treatment cannot be separated from order;
 4. at least 12 valid pairs exist in each order stratum;
 5. no identification assumption in Section 6 is violated.
 
@@ -352,20 +374,20 @@ H3-CAP-001 admission          ADMITTED
 Execution design              THIS ARTIFACT
 Design authorization          UNDER REVIEW
 Execution authorization       NOT GRANTED
-New execution                NOT AUTHORIZED
-Causal verdict               NOT AVAILABLE
+New execution                 NOT AUTHORIZED
+Causal verdict                NOT AVAILABLE
 ```
 
 ## 16. Required next governance transition
 
-The next governance action is a **separate review of this execution design**.
+The next governance action is a **separate formal design-approval review**.
 
 That review MUST determine whether:
 
 1. the order factor is causally identifiable;
 2. the paired comparison is sufficient to discriminate E1/E2;
 3. the fixed 24-pair allocation and block randomization are acceptable;
-4. the confidence procedure and verdict rule are adequately pre-specified;
+4. the exact Student-t confidence procedure and directional criterion are adequately pre-specified;
 5. validity/exclusion rules are sufficiently closed before observation;
 6. A1/A2/EEC-003 dependencies are correctly incorporated;
 7. the design is ready for a separate execution-authorization decision.
@@ -377,12 +399,13 @@ Only after an explicit governance disposition of this design may the project con
 ```text
 FROZEN EVIDENCE                    CLOSED / IMMUTABLE
 H3-CAP-001                         ADMITTED
-EXECUTION DESIGN                   DRAFT / UNDER REVIEW
+EXECUTION DESIGN                   v0.3 / READY FOR FORMAL DESIGN REVIEW
 ORDER FACTOR                       EXPLICIT / PROSPECTIVELY ASSIGNED
 SCHEDULE                            FIXED: 24 PAIRS / 12 PER ORDER STRATUM
 RANDOMIZATION                      FIXED: PERMUTED BLOCKS OF FOUR
 ESTIMAND                            FIXED: tau_hat / delta_hat
-EVIDENCE RULE                      FIXED: 95% CI PRIMARY RULE
+CONFIDENCE PROCEDURE               FIXED: TWO-SIDED 95% STUDENT-t
+TREATMENT DIRECTION                FIXED: tau > 0 FOR E1
 VALIDITY RULES                     FIXED BEFORE OBSERVATION
 STOPPING RULE                      FIXED: 24 SCHEDULED PAIRS
 EXECUTION AUTHORIZATION            NOT GRANTED
