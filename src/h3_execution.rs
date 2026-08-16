@@ -156,12 +156,18 @@ fn read_cpu_stat(path: &Path) -> io::Result<CgroupCpuStat> {
 
 fn parse_usec(value: &str) -> io::Result<u64> {
     value.parse::<u64>().map_err(|_| {
-        io::Error::new(io::ErrorKind::InvalidData, format!("invalid cpu.stat value: {value}"))
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("invalid cpu.stat value: {value}"),
+        )
     })
 }
 
 fn missing_stat(name: &str) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, format!("cpu.stat missing {name}"))
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!("cpu.stat missing {name}"),
+    )
 }
 
 #[cfg(test)]
@@ -173,8 +179,11 @@ mod tests {
     #[test]
     fn cpu_stat_parser_reads_primary_endpoint() {
         let path = std::env::temp_dir().join(format!("h3-cpu-stat-{}", std::process::id()));
-        fs::write(&path, "usage_usec 1234\nuser_usec 900\nsystem_usec 334\n")
-            .unwrap();
+        fs::write(
+            &path,
+            "usage_usec 1234\nuser_usec 900\nsystem_usec 334\n",
+        )
+        .unwrap();
         let stat = read_cpu_stat(&path).unwrap();
         fs::remove_file(path).unwrap();
         assert_eq!(stat.usage_usec, 1234);
