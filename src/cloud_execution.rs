@@ -163,12 +163,9 @@ pub fn recover(persisted: Option<&PersistedExecution>) -> RecoveryDecision {
     };
 
     if record.machine_state_ref != record.context.machine_state
-        || record
-            .attempts
-            .iter()
-            .any(|attempt| {
-                attempt.execution != record.context.execution || attempt.context != record.context
-            })
+        || record.attempts.iter().any(|attempt| {
+            attempt.execution != record.context.execution || attempt.context != record.context
+        })
     {
         return RecoveryDecision::FailClosed(OperationalFailure::StateInconsistent);
     }
