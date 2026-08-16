@@ -20,9 +20,6 @@ jobs:
           REGISTRATION_SHA: 582b737319b02993ec3909c55b7eea144c44bccb
         run: |
           set -euo pipefail
-          git fetch origin "$REGISTRATION_SHA" --depth=1
-          git show "$REGISTRATION_SHA:H3_EXECUTION_ARM_NICE.md" | grep -F 'Mapping ID: A1-nice-v1'
-          git show "$REGISTRATION_SHA:H3_EXECUTION_ARM_NICE.md" | grep -F 'nice(e) = 19 - floor(19 * e / 255)'
           grep -F 'Mapping ID: A1-nice-v1' H3_EXECUTION_ARM_NICE.md
           grep -F 'nice(e) = 19 - floor(19 * e / 255)' H3_EXECUTION_ARM_NICE.md
           echo "registration_sha=$REGISTRATION_SHA" | tee execution-registration.txt
