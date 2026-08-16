@@ -32,13 +32,13 @@ The harness is an observation mechanism, not a second specification. Adapters ma
 
 ### OP-2 Active-LifeGraph projection
 
-**Required observation:** active LifeGraph node information needed to establish the required process-to-node correspondence.
+**Required observation:** observable active LifeGraph node records and their Contract-defined identity-bearing fields needed for O-LG to evaluate process-to-node correspondence.
 
-**Adapter:** implementation-specific adapter that exposes node identity/correspondence information without requiring the Oracle to inspect graph containers or Rust types.
+**Adapter:** implementation-specific adapter that exposes raw semantic node records/fields only. The adapter MUST NOT compute, assert, or emit a precomputed `correspondence` predicate.
 
-**Oracle input:** active LifeGraph semantic projection.
+**Oracle input:** active LifeGraph semantic projection from the observed node records/fields; O-LG computes the required correspondence itself.
 
-**Evidence:** deterministic serialized semantic projection of active LifeGraph correspondence data.
+**Evidence:** deterministic serialized semantic projection of the observed active LifeGraph node records/fields. Evidence must not contain an adapter-generated pass/fail correspondence as the source of truth.
 
 ### OP-3 Historical/genealogical projection
 
@@ -50,30 +50,30 @@ The harness is an observation mechanism, not a second specification. Adapters ma
 
 **Evidence:** deterministic serialized projection of the relevant history and metadata.
 
-### OP-4 Semantic transition outcome
+### OP-4 Semantic transition witness
 
-**Required observation:** whether the exercised transition has the semantic outcome required to classify it as the accepted birth/death transition specified by the test case.
+**Required observation:** an independently specified test scenario identifying that the exercised operation is intended to be the accepted birth/death transition required by the frozen test case.
 
-**Adapter:** a semantic test fixture/transition boundary. It must not infer acceptance from a Rust return type, helper result, or internal control-flow signal alone.
+**Adapter:** test fixture/scenario definition supplies the transition preconditions and intended semantic scenario class (`birth` or `death`) before execution. The harness MUST NOT infer the scenario class from the implementation's return value, helper result, internal control flow, or post-state LifeGraph result.
 
-**Oracle input:** transition classification required by the frozen test case.
+**Oracle input:** the frozen scenario class plus the post-transition semantic projections required by C-LG/O-LG. The scenario class selects which already-frozen birth/death relations are evaluated; it does not add a new semantic predicate.
 
-**Evidence:** explicit transition-outcome record sufficient to justify why P02/P03/N02/N03/N04/N05 are evaluated under the relevant birth/death semantics.
+**Evidence:** explicit fixture/scenario record showing the preconditions and intended scenario class, plus the resulting semantic projections and Oracle verdict. The scenario record is evidence of test setup, not evidence that the implementation successfully achieved the expected outcome.
 
 ## Case mapping
 
 | Case | Required observation | Adapter | Oracle input | Expected evidence |
 |---|---|---|---|---|
-| LG-P01 | OP-1 + OP-2 | active-state adapter | active process + required node correspondence | PASS record showing required correspondence |
-| LG-P02 | OP-1 + OP-2 + OP-3 + OP-4 | semantic transition + projection adapters | child, node, parent/child relation, birth metadata, scheduling eligibility | PASS record containing each required birth relation |
-| LG-P03 | OP-1 + OP-2 + OP-3 + OP-4 | semantic transition + projection adapters | former process inactive in LifeGraph, death metadata, history | PASS record containing each required death relation |
-| LG-N01 | OP-1 + OP-2 | controlled semantic fixture/adapter | active process without required node | Oracle rejection attributable to missing correspondence |
-| LG-N02 | OP-1 + OP-2 + OP-4 | controlled birth fixture/adapter | child without required node | Oracle rejection attributable to missing child node |
-| LG-N03a | OP-1 + OP-2 + OP-3 + OP-4 | controlled birth fixture/adapter | child/node present, parent/child relation absent | Oracle rejection attributable to missing relation |
-| LG-N03b | OP-1 + OP-2 + OP-3 + OP-4 | controlled birth fixture/adapter | child/node/relation present, birth metadata absent | Oracle rejection attributable to missing metadata |
-| LG-N04 | OP-1 + OP-2 + OP-3 + OP-4 | controlled death fixture/adapter | formerly active node remains active | Oracle rejection attributable to active node |
-| LG-N05a | OP-1 + OP-2 + OP-3 + OP-4 | controlled death fixture/adapter | node removed, death metadata present, history absent | Oracle rejection attributable to missing history |
-| LG-N05b | OP-1 + OP-2 + OP-3 + OP-4 | controlled death fixture/adapter | node removed, history present, death metadata absent | Oracle rejection attributable to missing metadata |
+| LG-P01 | OP-1 + OP-2 | active-state adapter | active process + observed node records/fields | PASS record showing O-LG correspondence |
+| LG-P02 | OP-1 + OP-2 + OP-3 + OP-4 | semantic scenario + projection adapters | birth scenario class + child/node/relation/metadata/scheduling observations | PASS record containing each required birth relation |
+| LG-P03 | OP-1 + OP-2 + OP-3 + OP-4 | semantic scenario + projection adapters | death scenario class + former process/node/history/metadata observations | PASS record containing each required death relation |
+| LG-N01 | OP-1 + OP-2 | controlled semantic fixture/adapter | active process + observed node records/fields showing missing required node | Oracle rejection attributable to missing correspondence |
+| LG-N02 | OP-1 + OP-2 + OP-4 | controlled birth fixture/adapter | birth scenario class + child without required node | Oracle rejection attributable to missing child node |
+| LG-N03a | OP-1 + OP-2 + OP-3 + OP-4 | controlled birth fixture/adapter | birth scenario class + child/node present, parent/child relation absent | Oracle rejection attributable to missing relation |
+| LG-N03b | OP-1 + OP-2 + OP-3 + OP-4 | controlled birth fixture/adapter | birth scenario class + child/node/relation present, birth metadata absent | Oracle rejection attributable to missing metadata |
+| LG-N04 | OP-1 + OP-2 + OP-3 + OP-4 | controlled death fixture/adapter | death scenario class + formerly active node remains active | Oracle rejection attributable to active node |
+| LG-N05a | OP-1 + OP-2 + OP-3 + OP-4 | controlled death fixture/adapter | death scenario class + node removed, death metadata present, history absent | Oracle rejection attributable to missing history |
+| LG-N05b | OP-1 + OP-2 + OP-3 + OP-4 | controlled death fixture/adapter | death scenario class + node removed, history present, death metadata absent | Oracle rejection attributable to missing metadata |
 
 ## Observation-gap rules
 
@@ -91,7 +91,7 @@ An observation gap is **not** resolved by weakening or strengthening the Oracle.
 Each harness execution must be capable of producing:
 
 1. case identifier;
-2. semantic transition outcome where applicable;
+2. test scenario/witness record where applicable;
 3. the relevant semantic projections;
 4. Oracle input derived from those projections;
 5. Oracle verdict;
