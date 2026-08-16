@@ -1,4 +1,4 @@
-# H3-CAP-001 — Execution Design v0.3
+# H3-CAP-001 — Execution Design v0.4
 
 **Status:** DESIGN / NOT AUTHORIZED FOR EXECUTION
 
@@ -58,7 +58,7 @@ The order factor has two levels:
 
 ```text
 Z = -1  treatment first, control second
-Z = +1  control first, treatment second
+Z = +1  treatment second, control first
 ```
 
 ### 4.1 Fixed sample
@@ -121,8 +121,8 @@ With the fixed balanced allocation, the estimands are identified by the two orde
 mean_plus  = mean(D | Z=+1)
 mean_minus = mean(D | Z=-1)
 
-estimated treatment effect = tau_hat  = (mean_plus + mean_minus) / 2
-estimated order effect     = delta_hat = (mean_plus - mean_minus) / 2
+tau_hat   = (mean_plus + mean_minus) / 2
+delta_hat = (mean_plus - mean_minus) / 2
 ```
 
 The sign convention is fixed by this document and MUST NOT be changed after observing results.
@@ -160,65 +160,91 @@ Neither pattern is to be interpreted from a single pair or from selectively excl
 
 ## 8. Prospective evidence and verdict criterion
 
-The sole primary decision rule is fixed before execution.
+The primary decision rule is fixed before execution.
 
 ### 8.1 Exact confidence procedure
 
-For each order stratum, compute the paired mean contrast and its **Student-t confidence interval with 95% two-sided coverage**, using the within-stratum sample standard deviation of `D_i` and degrees of freedom `n-1`.
+Let the valid observations in the two order strata be indexed by `+` and `-`, with counts `n_+` and `n_-`, sample means `m_+` and `m_-`, and sample variances `s_+^2` and `s_-^2` for `D_i`.
 
-For the primary treatment component, define:
+The protocol requires `n_+ >= 12` and `n_- >= 12` for any causal verdict.
 
-```text
-CI_tau = CI95(mean_plus + mean_minus over 2)
-```
-
-For the primary order component, define:
+The estimators are:
 
 ```text
-CI_delta = CI95((mean_plus - mean_minus) over 2)
+m_+ = mean(D | Z=+1)
+m_- = mean(D | Z=-1)
+
+tau_hat   = (m_+ + m_-) / 2
+delta_hat = (m_+ - m_-) / 2
 ```
 
-The implementation MUST use the same deterministic formula, degrees-of-freedom convention, and rounding rule for every execution. No bootstrap, Bayesian interval, robust interval, or alternative confidence procedure may replace this primary procedure without a new design revision and governance decision.
-
-The numeric treatment direction is:
+Because the two order strata are distinct prospective samples, the standard error for both estimators is fixed as:
 
 ```text
-E1 treatment direction: tau > 0
+SE_tau   = 0.5 * sqrt(s_+^2 / n_+ + s_-^2 / n_-)
+SE_delta = 0.5 * sqrt(s_+^2 / n_+ + s_-^2 / n_-)
 ```
 
-The numeric order direction is not pre-claimed as positive or negative; E2 is about a non-zero order component, with its observed sign reported without changing the criterion.
+The confidence interval uses the **Welch-Satterthwaite degrees of freedom** for the corresponding two-stratum contrast:
 
-### E1-supporting verdict
+```text
+v = (s_+^2/n_+ + s_-^2/n_-)^2 /
+    ((s_+^2/n_+)^2/(n_+-1) + (s_-^2/n_-)^2/(n_--1))
+```
 
-E1 may be supported only if all of the following hold:
+For a two-sided 95% interval, let `t_0.975,v` be the Student-t critical value with `v` degrees of freedom. Then:
+
+```text
+CI_tau   = tau_hat   +/- t_0.975,v * SE_tau
+CI_delta = delta_hat +/- t_0.975,v * SE_delta
+```
+
+This is the complete primary confidence procedure. There is no separate within-stratum CI followed by an informal combination.
+
+The implementation MUST use these formulas, the Welch-Satterthwaite degrees-of-freedom calculation, two-sided 95% coverage, and full-precision intermediate values. Rounding is permitted only for presentation after the decision has been computed. No bootstrap, Bayesian interval, robust interval, pooled-variance interval, or alternative confidence procedure may replace this primary procedure without a new design revision and governance decision.
+
+The confidence procedure is symmetric for `tau_hat` and `delta_hat`; their only difference is the fixed contrast definition.
+
+### 8.2 Fixed E1 criterion
+
+E1 may be supported **only if all** of the following hold:
 
 1. `CI_tau` excludes zero;
 2. `tau_hat > 0`;
 3. `CI_delta` includes zero;
-4. at least 12 valid pairs exist in each order stratum;
-5. no identification assumption in Section 6 is violated.
+4. `n_+ >= 12` and `n_- >= 12`;
+5. no identification assumption in Section 6 is violated;
+6. all environment-integrity requirements for the valid observations pass.
 
-### E2-supporting verdict
+There is no alternative E1 interpretation rule.
 
-E2 may be supported only if all of the following hold:
+### 8.3 Fixed E2 criterion
+
+E2 may be supported **only if all** of the following hold:
 
 1. `CI_delta` excludes zero;
-2. the observed `delta_hat` is reported with its sign, without post-hoc relabelling;
-3. `CI_tau` includes zero, or a separately pre-specified joint interpretation shows that treatment cannot be separated from order;
-4. at least 12 valid pairs exist in each order stratum;
-5. no identification assumption in Section 6 is violated.
+2. `n_+ >= 12` and `n_- >= 12`;
+3. `CI_tau` includes zero;
+4. no identification assumption in Section 6 is violated;
+5. all environment-integrity requirements for the valid observations pass.
 
-### Mixed/ambiguous result
+The sign of `delta_hat` MUST be reported exactly as observed. No post-hoc relabelling of the order direction is permitted.
 
-The result MUST remain `INCONCLUSIVE` if:
+There is **no joint-interpretation fallback, secondary model, or discretionary rule** that may convert another pattern of confidence intervals into an E2 causal verdict.
 
-- both confidence intervals exclude zero;
-- neither confidence interval excludes zero;
-- the confidence results cannot distinguish E1 from E2 under the fixed rule;
-- fewer than 12 valid pairs exist in either order stratum;
+### 8.4 Fixed INCONCLUSIVE criterion
+
+The result MUST be `INCONCLUSIVE` if any of the following hold:
+
+- `n_+ < 12` or `n_- < 12`;
+- `CI_tau` and `CI_delta` both exclude zero;
+- `CI_tau` and `CI_delta` both include zero;
+- `CI_delta` excludes zero while `CI_tau` also excludes zero;
+- `CI_tau` excludes zero but `tau_hat <= 0`;
 - any identification assumption fails;
 - the environment invalidates the comparison;
-- required observations are missing under the validity rules.
+- required observations are missing under the validity rules;
+- the result satisfies neither the fixed E1 nor the fixed E2 criterion.
 
 No secondary analysis may override the primary verdict rule. Any exploratory analysis MUST be labelled exploratory and MUST NOT determine the causal verdict.
 
@@ -387,7 +413,7 @@ That review MUST determine whether:
 1. the order factor is causally identifiable;
 2. the paired comparison is sufficient to discriminate E1/E2;
 3. the fixed 24-pair allocation and block randomization are acceptable;
-4. the exact Student-t confidence procedure and directional criterion are adequately pre-specified;
+4. the exact confidence procedure and directional criterion are adequately pre-specified;
 5. validity/exclusion rules are sufficiently closed before observation;
 6. A1/A2/EEC-003 dependencies are correctly incorporated;
 7. the design is ready for a separate execution-authorization decision.
@@ -399,13 +425,14 @@ Only after an explicit governance disposition of this design may the project con
 ```text
 FROZEN EVIDENCE                    CLOSED / IMMUTABLE
 H3-CAP-001                         ADMITTED
-EXECUTION DESIGN                   v0.3 / READY FOR FORMAL DESIGN REVIEW
+EXECUTION DESIGN                   v0.4 / READY FOR FORMAL DESIGN REVIEW
 ORDER FACTOR                       EXPLICIT / PROSPECTIVELY ASSIGNED
 SCHEDULE                            FIXED: 24 PAIRS / 12 PER ORDER STRATUM
 RANDOMIZATION                      FIXED: PERMUTED BLOCKS OF FOUR
 ESTIMAND                            FIXED: tau_hat / delta_hat
-CONFIDENCE PROCEDURE               FIXED: TWO-SIDED 95% STUDENT-t
+CONFIDENCE PROCEDURE               FIXED: WELCH-SATTERTHWAITE + TWO-SIDED 95% STUDENT-t
 TREATMENT DIRECTION                FIXED: tau > 0 FOR E1
+E2 JOINT-INTERPRETATION FALLBACK   FORBIDDEN
 VALIDITY RULES                     FIXED BEFORE OBSERVATION
 STOPPING RULE                      FIXED: 24 SCHEDULED PAIRS
 EXECUTION AUTHORIZATION            NOT GRANTED
