@@ -27,6 +27,10 @@ fn root() -> PathBuf {
     PathBuf::from("/sys/fs/cgroup")
 }
 
+fn read_trim(path: PathBuf) -> Option<String> {
+    fs::read_to_string(path).ok().map(|s| s.trim().to_string())
+}
+
 fn main() -> io::Result<()> {
     let root = root();
     let controllers = fs::read_to_string(root.join("cgroup.controllers")).unwrap_or_default();
@@ -40,12 +44,20 @@ fn main() -> io::Result<()> {
     let parent = current
         .as_deref()
         .map(|p| root.join(p.trim_start_matches('/')));
+    let parent_cgroup_type = parent.as_ref().and_then(|p| read_trim(p.join("cgroup.type")));
+    let parent_controllers = parent
+        .as_ref()
+        .and_then(|p| read_trim(p.join("cgroup.controllers")));
+    let parent_subtree_control = parent
+        .as_ref()
+        .and_then(|p| read_trim(p.join("cgroup.subtree_control")));
     let cpu_max = parent
         .as_ref()
-        .and_then(|p| fs::read_to_string(p.join("cpu.max")).ok())
-        .map(|s| s.trim().to_string());
+        .and_then(|p| read_trim(p.join("cpu.max")));
 
     let mut child_created = false;
+    let mut child_cgroup_type = None;
+    let mut child_controllers = None;
     let mut child_cpu_max_before = None;
     let mut cpu_max_writable = false;
     let mut cpu_max_write_error = None;
@@ -67,10 +79,10 @@ fn main() -> io::Result<()> {
         match fs::create_dir(&child) {
             Ok(()) => {
                 child_created = true;
+                child_cgroup_type = read_trim(child.join("cgroup.type"));
+                child_controllers = read_trim(child.join("cgroup.controllers"));
                 let max_path = child.join("cpu.max");
-                child_cpu_max_before = fs::read_to_string(&max_path)
-                    .ok()
-                    .map(|s| s.trim().to_string());
+                child_cpu_max_before = read_trim(max_path.clone());
 
                 match fs::OpenOptions::new().write(true).open(&max_path) {
                     Ok(mut f) => {
@@ -84,13 +96,11 @@ fn main() -> io::Result<()> {
                     }
                 }
 
-                child_cpu_max_after = fs::read_to_string(&max_path)
-                    .ok()
-                    .map(|s| s.trim().to_string());
+                child_cpu_max_after = read_trim(max_path.clone());
 
                 let mut probe = Command::new("sh")
                     .arg("-c")
-                    .arg("printf '%s\\n' \"$$\" > /tmp/a2_probe_child_pid; sleep 5")
+                    .arg("sleep 5")
                     .stdout(Stdio::null())
                     .spawn()?;
                 let pid = probe.id();
@@ -110,9 +120,7 @@ fn main() -> io::Result<()> {
                     child_migration = migrated_path == Some(expected_child.as_str());
 
                     if child_migration {
-                        child_observed_cpu_max = fs::read_to_string(&max_path)
-                            .ok()
-                            .map(|s| s.trim().to_string());
+                        child_observed_cpu_max = read_trim(max_path);
                         child_observation_matches = child_observed_cpu_max.as_deref()
                             == Some(EXPECTED_CPU_MAX);
                     }
@@ -148,11 +156,16 @@ fn main() -> io::Result<()> {
     println!("cgroup_v2={v2}");
     println!("mount={}", root.display());
     println!("current_cgroup={}", current.unwrap_or_default());
+    println!("cgroup_type={}", parent_cgroup_type.unwrap_or_default());
     println!("controllers={}", controllers_vec.join(","));
+    println!("parent_cgroup_controllers={}", parent_controllers.unwrap_or_default());
+    println!("parent_subtree_control={}", parent_subtree_control.unwrap_or_default());
     println!("cpu_available={cpu_available}");
     println!("cpu_max={}", cpu_max.unwrap_or_default());
     println!("expected_cpu_max={EXPECTED_CPU_MAX}");
     println!("child_created={child_created}");
+    println!("child_cgroup_type={}", child_cgroup_type.unwrap_or_default());
+    println!("child_cgroup_controllers={}", child_controllers.unwrap_or_default());
     println!("child_cpu_max_before={}", child_cpu_max_before.unwrap_or_default());
     println!("cpu_max_writable={cpu_max_writable}");
     println!("cpu_max_write_error={}", cpu_max_write_error.unwrap_or_default());
